@@ -145,8 +145,11 @@ export default function WebView() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 20 }}>
             {featured.map(p => (
               <div key={p.id} className={`web-card${selected.has(p.id) ? ' sel' : ''}`}>
-                <div className="web-card-img">
-                  {p.emoji}
+                <div className="web-card-img" style={{ padding: 0, overflow: 'hidden' }}>
+                  {p.image_url
+                    ? <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <span style={{ fontSize: 52 }}>{p.emoji}</span>
+                  }
                   <span className="web-feat-badge">★ Dest.</span>
                   {selected.has(p.id) && <span className="web-check">✓</span>}
                 </div>
@@ -183,8 +186,11 @@ export default function WebView() {
         <div className="web-grid">
           {filtered.map(p => (
             <div key={p.id} className={`web-card${selected.has(p.id) ? ' sel' : ''}`}>
-              <div className="web-card-img">
-                {p.emoji}
+              <div className="web-card-img" style={{ padding: 0, overflow: 'hidden' }}>
+                {p.image_url
+                  ? <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <span style={{ fontSize: 52 }}>{p.emoji}</span>
+                }
                 {p.featured && <span className="web-feat-badge">★ Dest.</span>}
                 {selected.has(p.id) && <span className="web-check">✓</span>}
               </div>
