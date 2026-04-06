@@ -12,6 +12,12 @@ export default function WebView() {
   const [submitting, setSubmitting] = useState(false)
   const [qErr, setQErr] = useState('')
   const [form, setForm] = useState({ name:'', surname:'', email:'', phone:'', instagram:'', message:'' })
+  const [contactForm, setContactForm] = useState({ name:'', email:'', phone:'', message:'' })
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [carouselIdx, setCarouselIdx] = useState({})
+  const [contactSent, setContactSent] = useState(false)
+  const [contactSending, setContactSending] = useState(false)
+  const [contactErr, setContactErr] = useState('')
 
   useEffect(() => {
     loadPublicData()
@@ -105,20 +111,90 @@ export default function WebView() {
     setSubmitting(false)
   }
 
+  const submitContactForm = async () => {
+    if (!contactForm.name || !contactForm.email || !contactForm.message) {
+      setContactErr('Nombre, email y mensaje son obligatorios')
+      return
+    }
+    setContactSending(true)
+    setContactErr('')
+    try {
+      // Create client in CRM
+      const { data: existing } = await supabase.from('clients').select('id').eq('email', contactForm.email.toLowerCase()).maybeSingle()
+      if (!existing) {
+        await supabase.from('clients').insert({
+          name: contactForm.name.trim(),
+          email: contactForm.email.toLowerCase().trim(),
+          phone: contactForm.phone.trim(),
+          segment: 'nuevo',
+          source: 'web',
+          notes: `Contacto directo desde web · ${new Date().toLocaleDateString('es-SV')}`
+        })
+      }
+      // Create opportunity
+      const { data: clientData } = await supabase.from('clients').select('id').eq('email', contactForm.email.toLowerCase()).maybeSingle()
+      if (clientData) {
+        await supabase.from('opportunities').insert({
+          client_id: clientData.id,
+          title: `Consulta web: ${contactForm.message.slice(0, 50)}`,
+          value: 0,
+          stage: 'nueva',
+          date: new Date().toISOString().slice(0, 10),
+          notes: contactForm.message
+        })
+      }
+      // Send email via Web3Forms
+      const key = settings.web3forms_key
+      if (key) {
+        const wa2 = (settings.phone || '').replace(/\D/g, '')
+        await fetch('https://api.web3forms.com/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({
+            access_key: key,
+            subject: `✦ Mensaje web - ${contactForm.name} - ${settings.company || 'bybega'}`,
+            name: contactForm.name,
+            email: settings.notif_email || settings.email,
+            replyto: contactForm.email,
+            message: `MENSAJE DESDE LA WEB · ${settings.company || 'bybega'}\n\nNombre: ${contactForm.name}\nEmail: ${contactForm.email}\nTeléfono: ${contactForm.phone || '—'}\n\nMensaje:\n${contactForm.message}\n\n---\nCliente y oportunidad creados automáticamente en el CRM.`,
+            botcheck: ''
+          })
+        })
+      }
+      setContactSent(true)
+    } catch(e) {
+      setContactErr('Error al enviar. Intenta por WhatsApp.')
+    }
+    setContactSending(false)
+  }
+
   const wa = (settings.phone || '').replace(/\D/g, '')
 
   return (
     <div className="web-shell">
       {/* NAV */}
-      <nav className="web-nav">
+      <nav className="web-nav" style={{ position:'sticky', top:0, zIndex:20 }}>
         <div className="web-logo">{settings.company || 'bybega'}</div>
-        <div className="web-nav-links">
-          <button onClick={() => document.getElementById('web-hero')?.scrollIntoView({ behavior: 'smooth' })}>Inicio</button>
-          {featured.length > 0 && <button onClick={() => document.getElementById('web-featured')?.scrollIntoView({ behavior: 'smooth' })}>Destacados</button>}
-          <button onClick={() => document.getElementById('web-catalog')?.scrollIntoView({ behavior: 'smooth' })}>Catálogo</button>
-          <button onClick={() => document.getElementById('web-contact')?.scrollIntoView({ behavior: 'smooth' })}>Contacto</button>
+        <div className="web-nav-links" style={{ display:'flex' }}>
+          <button onClick={() => document.getElementById('web-hero')?.scrollIntoView({ behavior:'smooth' })}>Inicio</button>
+          {featured.length > 0 && <button onClick={() => document.getElementById('web-featured')?.scrollIntoView({ behavior:'smooth' })}>Destacados</button>}
+          <button onClick={() => document.getElementById('web-catalog')?.scrollIntoView({ behavior:'smooth' })}>Catálogo</button>
+          <button onClick={() => document.getElementById('web-contact')?.scrollIntoView({ behavior:'smooth' })}>Contacto</button>
         </div>
+        <button onClick={() => setMenuOpen(p => !p)} style={{ display:'none', background:'none', border:'none', color:'var(--gold)', fontSize:22, cursor:'pointer', padding:'0 4px', fontFamily:'monospace' }} className="web-hamburger">
+          {menuOpen ? '✕' : '☰'}
+        </button>
       </nav>
+      {menuOpen && (
+        <div style={{ background:'var(--dark2)', borderBottom:'1px solid var(--border)', padding:'12px 24px', display:'flex', flexDirection:'column', gap:2, position:'sticky', top:57, zIndex:19 }}>
+          {[['web-hero','Inicio'],['web-featured','Destacados'],['web-catalog','Catálogo'],['web-contact','Contacto']].map(([id,label]) => (
+            <button key={id} onClick={() => { document.getElementById(id)?.scrollIntoView({ behavior:'smooth' }); setMenuOpen(false) }}
+              style={{ background:'none', border:'none', color:'var(--muted)', fontSize:14, cursor:'pointer', fontFamily:'DM Sans,sans-serif', padding:'10px 0', textAlign:'left', borderBottom:'1px solid rgba(255,255,255,.04)' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* HERO */}
       <div id="web-hero" className="web-hero">
@@ -145,18 +221,38 @@ export default function WebView() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 20 }}>
             {featured.map(p => (
               <div key={p.id} className={`web-card${selected.has(p.id) ? ' sel' : ''}`}>
-                <div className="web-card-img" style={{ padding: 0, overflow: 'hidden' }}>
-                  {p.image_url
-                    ? <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <span style={{ fontSize: 52 }}>{p.emoji}</span>
-                  }
+                <div className="web-card-img" style={{ padding:0, overflow:'hidden', position:'relative' }}>
+                  {(() => {
+                    const imgs = p.images?.length ? p.images : (p.image_url ? [p.image_url] : [])
+                    const idx = carouselIdx[p.id] || 0
+                    return imgs.length > 0 ? (
+                      <>
+                        <img src={imgs[idx]} alt={p.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                        {imgs.length > 1 && (
+                          <>
+                            <button onClick={e => { e.stopPropagation(); setCarouselIdx(ci => ({...ci, [p.id]: (idx-1+imgs.length)%imgs.length})) }}
+                              style={{ position:'absolute', left:6, top:'50%', transform:'translateY(-50%)', background:'rgba(0,0,0,.5)', color:'#fff', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center' }}>‹</button>
+                            <button onClick={e => { e.stopPropagation(); setCarouselIdx(ci => ({...ci, [p.id]: (idx+1)%imgs.length})) }}
+                              style={{ position:'absolute', right:6, top:'50%', transform:'translateY(-50%)', background:'rgba(0,0,0,.5)', color:'#fff', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center' }}>›</button>
+                            <div style={{ position:'absolute', bottom:6, left:'50%', transform:'translateX(-50%)', display:'flex', gap:4 }}>
+                              {imgs.map((_,i) => <div key={i} style={{ width:5, height:5, borderRadius:'50%', background: i===idx?'#fff':'rgba(255,255,255,.4)' }} />)}
+                            </div>
+                          </>
+                        )}
+                      </>
+                    ) : <span style={{ fontSize:52 }}>{p.emoji}</span>
+                  })()}
                   <span className="web-feat-badge">★ Dest.</span>
                   {selected.has(p.id) && <span className="web-check">✓</span>}
                 </div>
                 <div className="web-card-body">
                   <div className="web-card-name">{p.name}</div>
                   <div className="web-card-mat">{p.material}</div>
-                  <div className="web-card-price">{usd(p.price)}</div>
+                  <div style={{ display:'flex', alignItems:'baseline', gap:8, marginTop:8, flexWrap:'wrap' }}>
+                    {p.original_price && <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:16, color:'rgba(255,255,255,.35)', textDecoration:'line-through' }}>{usd(p.original_price)}</span>}
+                    <span className="web-card-price" style={{ marginTop:0 }}>{usd(p.price)}</span>
+                    {p.original_price && <span style={{ background:'rgba(192,57,43,.7)', color:'#fff', fontSize:10, padding:'2px 6px', borderRadius:4, fontWeight:500 }}>-{Math.round((1-p.price/p.original_price)*100)}%</span>}
+                  </div>
                   <button className={`web-card-btn${selected.has(p.id) ? ' sel-active' : ''}`} onClick={() => toggle(p.id)}>
                     {selected.has(p.id) ? '✓ Seleccionado' : 'Seleccionar para cotización'}
                   </button>
@@ -186,18 +282,38 @@ export default function WebView() {
         <div className="web-grid">
           {filtered.map(p => (
             <div key={p.id} className={`web-card${selected.has(p.id) ? ' sel' : ''}`}>
-              <div className="web-card-img" style={{ padding: 0, overflow: 'hidden' }}>
-                {p.image_url
-                  ? <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : <span style={{ fontSize: 52 }}>{p.emoji}</span>
-                }
+              <div className="web-card-img" style={{ padding:0, overflow:'hidden', position:'relative' }}>
+                {(() => {
+                  const imgs = p.images?.length ? p.images : (p.image_url ? [p.image_url] : [])
+                  const idx = carouselIdx[p.id] || 0
+                  return imgs.length > 0 ? (
+                    <>
+                      <img src={imgs[idx]} alt={p.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                      {imgs.length > 1 && (
+                        <>
+                          <button onClick={e => { e.stopPropagation(); setCarouselIdx(ci => ({...ci, [p.id]: (idx-1+imgs.length)%imgs.length})) }}
+                            style={{ position:'absolute', left:6, top:'50%', transform:'translateY(-50%)', background:'rgba(0,0,0,.5)', color:'#fff', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center' }}>‹</button>
+                          <button onClick={e => { e.stopPropagation(); setCarouselIdx(ci => ({...ci, [p.id]: (idx+1)%imgs.length})) }}
+                            style={{ position:'absolute', right:6, top:'50%', transform:'translateY(-50%)', background:'rgba(0,0,0,.5)', color:'#fff', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center' }}>›</button>
+                          <div style={{ position:'absolute', bottom:6, left:'50%', transform:'translateX(-50%)', display:'flex', gap:4 }}>
+                            {imgs.map((_,i) => <div key={i} style={{ width:5, height:5, borderRadius:'50%', background: i===idx?'#fff':'rgba(255,255,255,.4)' }} />)}
+                          </div>
+                        </>
+                      )}
+                    </>
+                  ) : <span style={{ fontSize:52 }}>{p.emoji}</span>
+                })()}
                 {p.featured && <span className="web-feat-badge">★ Dest.</span>}
                 {selected.has(p.id) && <span className="web-check">✓</span>}
               </div>
               <div className="web-card-body">
                 <div className="web-card-name">{p.name}</div>
                 <div className="web-card-mat">{p.material} · {catName(p.cat_id)}</div>
-                <div className="web-card-price">{usd(p.price)}</div>
+                <div style={{ display:'flex', alignItems:'baseline', gap:8, marginTop:8, flexWrap:'wrap' }}>
+                  {p.original_price && <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:16, color:'rgba(255,255,255,.35)', textDecoration:'line-through' }}>{usd(p.original_price)}</span>}
+                  <span className="web-card-price" style={{ marginTop:0 }}>{usd(p.price)}</span>
+                  {p.original_price && <span style={{ background:'rgba(192,57,43,.7)', color:'#fff', fontSize:10, padding:'2px 6px', borderRadius:4, fontWeight:500 }}>-{Math.round((1-p.price/p.original_price)*100)}%</span>}
+                </div>
                 <button className={`web-card-btn${selected.has(p.id) ? ' sel-active' : ''}`} onClick={() => toggle(p.id)}>
                   {selected.has(p.id) ? '✓ Seleccionado' : 'Seleccionar para cotización'}
                 </button>
@@ -211,13 +327,67 @@ export default function WebView() {
       </div>
 
       {/* CONTACT */}
-      <div id="web-contact" className="web-section" style={{ maxWidth: 560 }}>
-        <div className="web-section-title">Contacto</div>
-        <div className="web-section-sub">escríbenos directamente</div>
-        <div className="web-divider" />
-        <div style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 2 }}>
-          {settings.email}<br />{settings.phone}<br />
-          {settings.instagram}<br />{settings.address}
+      <div id="web-contact" className="web-section">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48 }}>
+          <div>
+            <div className="web-section-title">Contáctanos</div>
+            <div className="web-section-sub">respuesta en menos de 24h</div>
+            <div className="web-divider" />
+            <div style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 2.2 }}>
+              {settings.email && <div>✉ {settings.email}</div>}
+              {settings.phone && <div>📱 {settings.phone}</div>}
+              {settings.instagram && <div>📷 {settings.instagram}</div>}
+              {settings.address && <div>📍 {settings.address}</div>}
+            </div>
+            <button
+              onClick={() => window.open(`https://wa.me/${wa}?text=${encodeURIComponent('Hola! Me gustaría consultar sobre sus joyas.')}`, '_blank')}
+              style={{ marginTop: 20, background: '#25d366', color: '#fff', border: 'none', borderRadius: 8, padding: '11px 22px', fontSize: 13, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 500 }}
+            >
+              💬 Escribir por WhatsApp
+            </button>
+          </div>
+          <div>
+            <div className="web-section-title">Envíanos un mensaje</div>
+            <div className="web-section-sub">también puedes escribirnos aquí</div>
+            <div className="web-divider" />
+            {contactSent ? (
+              <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>✦</div>
+                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 22, color: 'var(--gold)', marginBottom: 8 }}>¡Mensaje enviado!</div>
+                <div style={{ fontSize: 13, color: 'var(--muted)' }}>Te responderemos pronto.</div>
+                <button onClick={() => { setContactSent(false); setContactForm({ name:'', email:'', phone:'', message:'' }) }}
+                  style={{ marginTop: 16, background: 'transparent', border: '1px solid rgba(184,151,74,.4)', color: 'var(--gold)', padding: '8px 18px', borderRadius: 6, fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                  Enviar otro mensaje
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label className="qf-label">Nombre *</label>
+                    <input className="qf-input" value={contactForm.name} onChange={e => setContactForm(p => ({...p, name: e.target.value}))} placeholder="Tu nombre" />
+                  </div>
+                  <div>
+                    <label className="qf-label">Teléfono</label>
+                    <input className="qf-input" value={contactForm.phone} onChange={e => setContactForm(p => ({...p, phone: e.target.value}))} placeholder="+503 7000-0000" />
+                  </div>
+                </div>
+                <div>
+                  <label className="qf-label">Email *</label>
+                  <input className="qf-input" type="email" value={contactForm.email} onChange={e => setContactForm(p => ({...p, email: e.target.value}))} placeholder="tu@email.com" />
+                </div>
+                <div>
+                  <label className="qf-label">Mensaje *</label>
+                  <textarea className="qf-input" rows={3} value={contactForm.message} onChange={e => setContactForm(p => ({...p, message: e.target.value}))} placeholder="¿En qué podemos ayudarte?" style={{ resize: 'vertical' }} />
+                </div>
+                {contactErr && <div style={{ color: '#e57373', fontSize: 12 }}>{contactErr}</div>}
+                <button onClick={submitContactForm} disabled={contactSending}
+                  style={{ background: 'var(--gold)', color: 'var(--dark)', border: 'none', padding: '12px', borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', opacity: contactSending ? .7 : 1 }}>
+                  {contactSending ? 'Enviando…' : 'Enviar mensaje →'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

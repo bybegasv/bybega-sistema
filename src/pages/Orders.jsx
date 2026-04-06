@@ -8,6 +8,7 @@ function OrderModal({ order, clients, products, opportunities, onSave, onClose }
   const [status, setStatus] = useState(order?.status || 'borrador')
   const [ivaRate, setIvaRate] = useState(order?.iva_rate ?? 13)
   const [notes, setNotes] = useState(order?.notes || '')
+  const [store, setStore] = useState(order?.store || 'ambas')
   const [items, setItems] = useState(order?.items?.length ? order.items : [{ product_id:'', name:'', price:0, qty:1, sub:0 }])
 
   const setProduct = (idx, pid) => {
@@ -90,6 +91,15 @@ function OrderModal({ order, clients, products, opportunities, onSave, onClose }
           <span style={{ color: 'var(--gold)', fontFamily: 'Cormorant Garamond, serif', fontSize: 18 }}>TOTAL: {usd(total)}</span>
         </div>
 
+        <div className="fr">
+          <div className="fg"><label>Tienda</label>
+            <select value={store} onChange={e => setStore(e.target.value)}>
+              <option value="ambas">Ambas tiendas</option>
+              <option value="tienda1">Tienda 1</option>
+              <option value="tienda2">Tienda 2</option>
+            </select>
+          </div>
+        </div>
         <div className="fg"><label>Notas</label><textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} /></div>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>

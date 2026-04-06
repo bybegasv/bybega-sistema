@@ -13,6 +13,7 @@ const NAV = [
   { to: '/admin/pedidos', label: 'Pedidos', icon: '▤' },
   { to: '/admin/facturas', label: 'Facturas', icon: '◈' },
   { to: '/admin/entregas', label: 'Entregas', icon: '▷' },
+  { to: '/admin/inventario', label: 'Inventario', icon: '◫' },
   { section: 'Sistema' },
   { to: '/admin/configuracion', label: 'Configuración', icon: '⚙' },
 ]
