@@ -11,6 +11,7 @@ import Opportunities from './pages/Opportunities'
 import Orders from './pages/Orders'
 import Invoices from './pages/Invoices'
 import Deliveries from './pages/Deliveries'
+import Inventory from './pages/Inventory'
 import Settings from './pages/Settings'
 import WebView from './pages/WebView'
 
@@ -43,6 +44,7 @@ export default function App() {
           <Route path="pedidos" element={<Orders />} />
           <Route path="facturas" element={<Invoices />} />
           <Route path="entregas" element={<Deliveries />} />
+          <Route path="inventario" element={<Inventory />} />
           <Route path="configuracion" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/admin" replace />} />
