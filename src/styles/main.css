@@ -235,3 +235,27 @@ tr:hover td{background:#faf8f5}
   .web-hero{padding:40px 24px}
   .web-hero-title{font-size:32px}
 }
+
+/* MOBILE RESPONSIVE - WEB PUBLIC */
+@media(max-width:640px){
+  .web-nav{padding:0 20px}
+  .web-nav-links{display:none!important}
+  .web-hamburger{display:flex!important}
+  .web-hero{padding:40px 20px}
+  .web-hero-title{font-size:30px}
+  .web-section{padding:28px 20px}
+  .web-section-title{font-size:22px}
+  .web-grid{grid-template-columns:repeat(2,1fr);gap:12px}
+  .web-footer{grid-template-columns:1fr;padding:24px 20px;gap:16px}
+  .web-sel-bar{padding:12px 16px;flex-wrap:wrap;gap:10px}
+  .web-cats{gap:6px}
+  .web-cat-btn{padding:5px 12px;font-size:11px}
+  .web-featured-grid{grid-template-columns:repeat(2,1fr)!important}
+  #web-contact > div{grid-template-columns:1fr!important}
+  .qf-inner{padding:24px 16px 60px}
+  .qf-inner > div:first-child{margin-bottom:20px}
+}
+@media(max-width:400px){
+  .web-grid{grid-template-columns:1fr}
+  .web-featured-grid{grid-template-columns:1fr!important}
+}
