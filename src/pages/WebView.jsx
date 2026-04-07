@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 export default function WebView() {
@@ -15,6 +15,9 @@ export default function WebView() {
   const [contactForm, setContactForm] = useState({ name:'', email:'', phone:'', message:'' })
   const [menuOpen, setMenuOpen] = useState(false)
   const [carouselIdx, setCarouselIdx] = useState({})
+  const [banners, setBanners] = useState([])
+  const [bannerIdx, setBannerIdx] = useState(0)
+  const bannerTimer = useRef(null)
   const [contactSent, setContactSent] = useState(false)
   const [contactSending, setContactSending] = useState(false)
   const [contactErr, setContactErr] = useState('')
@@ -24,14 +27,16 @@ export default function WebView() {
   }, [])
 
   const loadPublicData = async () => {
-    const [{ data: s }, { data: c }, { data: p }] = await Promise.all([
+    const [{ data: s }, { data: c }, { data: p }, { data: b }] = await Promise.all([
       supabase.from('settings').select('*'),
       supabase.from('categories').select('*').order('sort_order'),
-      supabase.from('products').select('*').eq('status', 'disponible').order('created_at')
+      supabase.from('products').select('*').eq('status', 'disponible').order('created_at'),
+      supabase.from('banners').select('*').eq('active', true).order('sort_order')
     ])
     if (s) { const obj = {}; s.forEach(r => { obj[r.key] = r.value }); setSettings(obj) }
     if (c) setCategories(c)
     if (p) setProducts(p)
+    if (b) setBanners(b)
   }
 
   const usd = n => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
@@ -51,6 +56,17 @@ export default function WebView() {
   const filtered = cat === 'todos' ? products : products.filter(p => p.cat_id === cat)
 
   const sf = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
+
+  const goToBannerAction = (banner) => {
+    const action = banner.button_action
+    if (action === 'catalog') document.getElementById('web-catalog')?.scrollIntoView({ behavior: 'smooth' })
+    else if (action === 'featured') document.getElementById('web-featured')?.scrollIntoView({ behavior: 'smooth' })
+    else if (action === 'contact') document.getElementById('web-contact')?.scrollIntoView({ behavior: 'smooth' })
+    else if (action === 'whatsapp') window.open(`https://wa.me/${wa}?text=${encodeURIComponent('Hola! Vi una oferta en la web de bybega y me interesa.')}`, '_blank')
+    else if (action === 'product' && banner.product_id) {
+      document.getElementById('web-catalog')?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }
 
   const submitQuote = async () => {
     if (!form.name || !form.email) { setQErr('Nombre y email son obligatorios'); return }
@@ -256,6 +272,16 @@ export default function WebView() {
                   <button className={`web-card-btn${selected.has(p.id) ? ' sel-active' : ''}`} onClick={() => toggle(p.id)}>
                     {selected.has(p.id) ? '✓ Seleccionado' : 'Seleccionar para cotización'}
                   </button>
+                  {settings.paypal_email && (
+                    <a href={`https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=${encodeURIComponent(settings.paypal_email)}&amount=${p.price}&currency_code=USD&item_name=${encodeURIComponent(p.name + ' - ' + (settings.company || 'bybega'))}&no_shipping=1`}
+                      target="_blank" rel="noreferrer"
+                      style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', background:'#0070ba', color:'#fff', padding:'8px', borderRadius:6, fontSize:12, textDecoration:'none', marginTop:4, fontFamily:'DM Sans,sans-serif' }}
+                      onMouseOver={e=>e.currentTarget.style.background='#005ea6'}
+                      onMouseOut={e=>e.currentTarget.style.background='#0070ba'}>
+                      <span style={{fontFamily:'Arial,sans-serif',fontWeight:700,fontSize:13}}>Pay</span><span style={{fontFamily:'Arial,sans-serif',fontWeight:700,fontSize:13,color:'#00c8ff'}}>Pal</span>
+                      <span>· Comprar ahora</span>
+                    </a>
+                  )}
                 </div>
               </div>
             ))}
@@ -320,6 +346,16 @@ export default function WebView() {
                 <button className="web-card-btn" style={{ opacity: .7, marginTop: 4 }} onClick={() => window.open(`https://wa.me/${wa}?text=${encodeURIComponent(`Hola! Me interesa "${p.name}" de bybega. ¿Está disponible?`)}`, '_blank')}>
                   Consultar por WhatsApp
                 </button>
+                {settings.paypal_email && (
+                  <a href={`https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=${encodeURIComponent(settings.paypal_email)}&amount=${p.price}&currency_code=USD&item_name=${encodeURIComponent(p.name + ' - ' + (settings.company || 'bybega'))}&no_shipping=1`}
+                    target="_blank" rel="noreferrer"
+                    style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', background:'#0070ba', color:'#fff', padding:'8px', borderRadius:6, fontSize:12, textDecoration:'none', marginTop:4, transition:'background .15s', fontFamily:'DM Sans,sans-serif' }}
+                    onMouseOver={e=>e.currentTarget.style.background='#005ea6'}
+                    onMouseOut={e=>e.currentTarget.style.background='#0070ba'}>
+                    <span style={{fontFamily:'Arial,sans-serif',fontWeight:700,fontSize:13}}>Pay</span><span style={{fontFamily:'Arial,sans-serif',fontWeight:700,fontSize:13,color:'#00c8ff'}}>Pal</span>
+                    <span>· Comprar ahora</span>
+                  </a>
+                )}
               </div>
             </div>
           ))}
