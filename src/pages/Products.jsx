@@ -19,26 +19,27 @@ function ProductModal({ prod, cats, onSave, onClose }) {
     images: prod?.images || [], image_url: prod?.image_url || ''
   })
   const [uploading, setUploading] = useState(false)
+  const [uploadErr, setUploadErr] = useState('')
   const fileRef = useRef()
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   const handleUpload = async (e) => {
     const files = Array.from(e.target.files)
     if (!files.length) return
+    setUploadErr('')
     const current = form.images || []
     const remaining = MAX_PHOTOS - current.length
-    if (remaining <= 0) { alert('Máximo 5 fotos por producto'); return }
+    if (remaining <= 0) { setUploadErr('Máximo 5 fotos por producto'); return }
     setUploading(true)
     const newUrls = []
     for (const file of files.slice(0, remaining)) {
-      if (file.size > 5 * 1024 * 1024) continue
-      const ext = file.name.split('.').pop()
+      if (file.size > 5 * 1024 * 1024) { setUploadErr(`"${file.name}" supera 5MB y se omitió`); continue }
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
       const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
       const { error } = await supabase.storage.from('product-images').upload(fileName, file, { upsert: true })
-      if (!error) {
-        const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(fileName)
-        newUrls.push(publicUrl)
-      }
+      if (error) { setUploadErr('Error al subir: ' + error.message); continue }
+      const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(fileName)
+      newUrls.push(publicUrl)
     }
     const updated = [...current, ...newUrls]
     setForm(p => ({ ...p, images: updated, image_url: updated[0] || p.image_url }))
@@ -55,23 +56,29 @@ function ProductModal({ prod, cats, onSave, onClose }) {
 
   const imgs = form.images || []
 
+  const submit = () => {
+    if (!form.name?.trim() || !form.price) return alert('Nombre y precio son obligatorios')
+    if (Number(form.price) < 0) return alert('Precio inválido')
+    onSave(form)
+  }
+
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal-box lg" style={{ width: 'min(780px, 95vw)' }}>
         <div className="modal-title">{prod ? 'Editar' : 'Nueva'} joya</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 20 }}>
           <div>
-            <div className="fg"><label>Nombre</label><input value={form.name} onChange={e => set('name', e.target.value)} placeholder="Anillo Eternal Gold" /></div>
+            <div className="fg"><label>Nombre</label><input maxLength={120} value={form.name} onChange={e => set('name', e.target.value)} placeholder="Anillo Eternal Gold" /></div>
             <div className="fr">
-              <div className="fg"><label>Referencia</label><input value={form.ref} onChange={e => set('ref', e.target.value)} placeholder="ANI-001" /></div>
+              <div className="fg"><label>Referencia</label><input maxLength={40} value={form.ref} onChange={e => set('ref', e.target.value)} placeholder="ANI-001" /></div>
               <div className="fg"><label>Categoría</label><select value={form.cat_id} onChange={e => set('cat_id', e.target.value)}>{cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
             </div>
             <div className="fr">
-              <div className="fg"><label>Precio actual (USD)</label><input type="number" step="0.01" value={form.price} onChange={e => set('price', e.target.value)} placeholder="0.00" /></div>
-              <div className="fg"><label>Precio anterior tachado</label><input type="number" step="0.01" value={form.original_price} onChange={e => set('original_price', e.target.value)} placeholder="Opcional" /></div>
+              <div className="fg"><label>Precio actual (USD)</label><input type="number" step="0.01" min="0" value={form.price} onChange={e => set('price', e.target.value)} placeholder="0.00" /></div>
+              <div className="fg"><label>Precio anterior tachado</label><input type="number" step="0.01" min="0" value={form.original_price} onChange={e => set('original_price', e.target.value)} placeholder="Opcional" /></div>
             </div>
             <div className="fr">
-              <div className="fg"><label>Material</label><input value={form.material} onChange={e => set('material', e.target.value)} placeholder="Oro 18k..." /></div>
+              <div className="fg"><label>Material</label><input maxLength={80} value={form.material} onChange={e => set('material', e.target.value)} placeholder="Oro 18k..." /></div>
               <div className="fg"><label>Tienda</label>
                 <select value={form.store} onChange={e => set('store', e.target.value)}>
                   <option value="ambas">Ambas tiendas</option>
@@ -80,7 +87,7 @@ function ProductModal({ prod, cats, onSave, onClose }) {
                 </select>
               </div>
             </div>
-            <div className="fg"><label>Descripción</label><textarea rows={2} value={form.description} onChange={e => set('description', e.target.value)} /></div>
+            <div className="fg"><label>Descripción</label><textarea maxLength={1000} rows={2} value={form.description} onChange={e => set('description', e.target.value)} /></div>
             <div className="fr">
               <div className="fg"><label>Estado</label>
                 <select value={form.status} onChange={e => set('status', e.target.value)}>
@@ -117,6 +124,7 @@ function ProductModal({ prod, cats, onSave, onClose }) {
                 )}
               </div>
               <input ref={fileRef} type="file" accept="image/*" multiple style={{ display:'none' }} onChange={handleUpload} disabled={uploading} />
+              {uploadErr && <p style={{ fontSize:11, color:'var(--danger)', marginTop:5 }}>{uploadErr}</p>}
               <p style={{ fontSize:11, color:'var(--muted)', marginTop:5, lineHeight:1.5 }}>La 1ª es la principal. Puedes subir varias a la vez. Máx 5MB c/u.</p>
             </div>
             {imgs.length === 0 && (
@@ -128,7 +136,7 @@ function ProductModal({ prod, cats, onSave, onClose }) {
         </div>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-gold" onClick={() => { if (!form.name || !form.price) return alert('Nombre y precio requeridos'); onSave(form) }} disabled={uploading}>{uploading ? 'Subiendo…' : 'Guardar'}</button>
+          <button className="btn btn-gold" onClick={submit} disabled={uploading}>{uploading ? 'Subiendo…' : 'Guardar'}</button>
         </div>
       </div>
     </div>
@@ -200,10 +208,10 @@ export default function Products() {
                 <div style={{ display:'flex', alignItems:'baseline', gap:6, marginTop:6 }}>
                   {p.original_price && <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:13, color:'var(--muted)', textDecoration:'line-through' }}>{usd(p.original_price)}</span>}
                   <span className="pprice" style={{ marginTop:0 }}>{usd(p.price)}</span>
-                  {p.original_price && <span className="tag tg-r" style={{ fontSize:10 }}>-{Math.round((1-p.price/p.original_price)*100)}%</span>}
+                  {p.original_price && Number(p.original_price) > Number(p.price) && <span className="tag tg-r" style={{ fontSize:10 }}>-{Math.round((1-p.price/p.original_price)*100)}%</span>}
                 </div>
                 <div style={{ fontSize:11, color:isLow?'var(--danger)':'var(--muted)', marginTop:2 }}>
-                  Stock: {p.stock_total} {isLow&&'⚠'} · T1:{p.stock_t1} T2:{p.stock_t2}
+                  Stock: {p.stock_total ?? 0} {isLow&&'⚠'} · T1:{p.stock_t1 ?? 0} T2:{p.stock_t2 ?? 0}
                 </div>
                 <div className="pactions">
                   <button className="btn btn-outline btn-sm" onClick={() => setModal(p)}>Editar</button>

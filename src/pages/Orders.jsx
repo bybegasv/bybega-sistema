@@ -31,8 +31,9 @@ function OrderModal({ order, clients, products, opportunities, onSave, onClose }
   const usd = n => '$' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
   const submit = () => {
+    if (!clientId) return alert('Selecciona un cliente')
     if (!valid.length) return alert('Agrega al menos un producto')
-    onSave({ client_id: clientId, opp_id: oppId || null, items: valid, subtotal, iva_rate: ivaRate, iva_amt: ivaAmt, total, status, date, notes })
+    onSave({ client_id: clientId, opp_id: oppId || null, items: valid, subtotal, iva_rate: ivaRate, iva_amt: ivaAmt, total, status, date, notes, store })
     onClose()
   }
 
@@ -43,6 +44,7 @@ function OrderModal({ order, clients, products, opportunities, onSave, onClose }
         <div className="fr">
           <div className="fg"><label>Cliente</label>
             <select value={clientId} onChange={e => setClientId(e.target.value)}>
+              <option value="">— Selecciona cliente —</option>
               {clients.map(c => <option key={c.id} value={c.id}>{c.name} {c.surname}</option>)}
             </select>
           </div>
@@ -78,20 +80,13 @@ function OrderModal({ order, clients, products, opportunities, onSave, onClose }
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 6 }} onClick={addItem}>+ Agregar producto</button>
         </div>
 
-        <div className="fg"><label>IVA</label>
-          <select value={ivaRate} onChange={e => setIvaRate(parseInt(e.target.value))}>
-            <option value={0}>Sin IVA (Exento)</option>
-            <option value={13}>IVA 13%</option>
-          </select>
-        </div>
-
-        <div className="oi-total">
-          Subtotal: <strong>{usd(subtotal)}</strong> &nbsp;|&nbsp;
-          IVA {ivaRate}%: <strong>{usd(ivaAmt)}</strong> &nbsp;|&nbsp;
-          <span style={{ color: 'var(--gold)', fontFamily: 'Cormorant Garamond, serif', fontSize: 18 }}>TOTAL: {usd(total)}</span>
-        </div>
-
         <div className="fr">
+          <div className="fg"><label>IVA</label>
+            <select value={ivaRate} onChange={e => setIvaRate(parseInt(e.target.value))}>
+              <option value={0}>Sin IVA (Exento)</option>
+              <option value={13}>IVA 13%</option>
+            </select>
+          </div>
           <div className="fg"><label>Tienda</label>
             <select value={store} onChange={e => setStore(e.target.value)}>
               <option value="ambas">Ambas tiendas</option>
@@ -100,7 +95,14 @@ function OrderModal({ order, clients, products, opportunities, onSave, onClose }
             </select>
           </div>
         </div>
-        <div className="fg"><label>Notas</label><textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} /></div>
+
+        <div className="oi-total">
+          Subtotal: <strong>{usd(subtotal)}</strong> &nbsp;|&nbsp;
+          IVA {ivaRate}%: <strong>{usd(ivaAmt)}</strong> &nbsp;|&nbsp;
+          <span style={{ color: 'var(--gold)', fontFamily: 'Cormorant Garamond, serif', fontSize: 18 }}>TOTAL: {usd(total)}</span>
+        </div>
+
+        <div className="fg"><label>Notas</label><textarea maxLength={1000} rows={2} value={notes} onChange={e => setNotes(e.target.value)} /></div>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
           <button className="btn btn-gold" onClick={submit}>Guardar pedido</button>
@@ -115,6 +117,7 @@ export default function Orders() {
   const [modal, setModal] = useState(null)
 
   const hasInvoice = id => invoices.some(i => i.order_id === id)
+  const storeLbl = { ambas:'Ambas', tienda1:'T1', tienda2:'T2' }
 
   return (
     <div className="page">
@@ -125,13 +128,14 @@ export default function Orders() {
 
       <div className="tw">
         <table>
-          <thead><tr><th>#</th><th>Cliente</th><th>Fecha</th><th>Items</th><th>Subtotal</th><th>IVA</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <thead><tr><th>#</th><th>Cliente</th><th>Fecha</th><th>Tienda</th><th>Items</th><th>Subtotal</th><th>IVA</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead>
           <tbody>
             {orders.map(o => (
               <tr key={o.id}>
                 <td style={{ fontFamily: 'monospace', fontSize: 12 }}>#{String(o.id).padStart(3,'0')}</td>
                 <td>{clientName(o.client_id)}</td>
                 <td>{fdate(o.date)}</td>
+                <td><span className="tag tg-b" style={{ fontSize:10 }}>{storeLbl[o.store]||'Ambas'}</span></td>
                 <td style={{ fontSize: 12 }}>{(o.items || []).map(i => `${i.name} x${i.qty}`).join(', ')}</td>
                 <td>{usd(o.subtotal)}</td>
                 <td>{o.iva_rate ? `${o.iva_rate}%` : '—'}</td>

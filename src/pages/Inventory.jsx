@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useData } from '../context/DataContext'
 import { supabase } from '../lib/supabase'
 
-function PurchaseModal({ products, onSave, onClose }) {
+function PurchaseModal({ products, onSave, onClose, saving }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0,10))
   const [supplier, setSupplier] = useState('')
   const [store, setStore] = useState('ambas')
@@ -14,9 +14,9 @@ function PurchaseModal({ products, onSave, onClose }) {
   const setItem = (idx, k, v) => setItems(p => p.map((it,i) => i===idx ? {...it, [k]:v} : it))
   const setProduct = (idx, pid) => {
     const p = products.find(x => x.id === pid)
-    setItem(idx, 'product_id', pid)
-    setItem(idx, 'product_name', p?.name || '')
-    setItem(idx, 'unit_cost', p?.price || 0)
+    setItems(prev => prev.map((it, i) => i === idx
+      ? { ...it, product_id: pid, product_name: p?.name || '', unit_cost: it.unit_cost || Number(p?.price || 0) }
+      : it))
   }
 
   const total = items.reduce((a,i) => a + (i.qty * i.unit_cost), 0)
@@ -28,7 +28,7 @@ function PurchaseModal({ products, onSave, onClose }) {
         <div className="modal-title">Nueva entrada de inventario</div>
         <div className="fr">
           <div className="fg"><label>Fecha</label><input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
-          <div className="fg"><label>Proveedor</label><input value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Nombre del proveedor" /></div>
+          <div className="fg"><label>Proveedor</label><input maxLength={120} value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Nombre del proveedor" /></div>
         </div>
         <div className="fr">
           <div className="fg"><label>Destino</label>
@@ -38,7 +38,7 @@ function PurchaseModal({ products, onSave, onClose }) {
               <option value="tienda2">Tienda 2</option>
             </select>
           </div>
-          <div className="fg"><label>Notas</label><input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Factura, observaciones..." /></div>
+          <div className="fg"><label>Notas</label><input maxLength={500} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Factura, observaciones..." /></div>
         </div>
 
         <div className="fg">
@@ -50,7 +50,7 @@ function PurchaseModal({ products, onSave, onClose }) {
                 {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
               <input type="number" min="1" value={it.qty} onChange={e => setItem(idx,'qty',parseInt(e.target.value)||1)} placeholder="Cant." style={{ padding:'7px 10px', border:'1px solid rgba(0,0,0,.14)', borderRadius:6, fontSize:12, outline:'none' }} />
-              <input type="number" step="0.01" value={it.unit_cost} onChange={e => setItem(idx,'unit_cost',parseFloat(e.target.value)||0)} placeholder="Costo" style={{ padding:'7px 10px', border:'1px solid rgba(0,0,0,.14)', borderRadius:6, fontSize:12, outline:'none' }} />
+              <input type="number" step="0.01" min="0" value={it.unit_cost} onChange={e => setItem(idx,'unit_cost',parseFloat(e.target.value)||0)} placeholder="Costo" style={{ padding:'7px 10px', border:'1px solid rgba(0,0,0,.14)', borderRadius:6, fontSize:12, outline:'none' }} />
               <button onClick={() => removeItem(idx)} style={{ background:'none', border:'none', color:'var(--danger)', cursor:'pointer', fontSize:16, padding:0 }}>✕</button>
             </div>
           ))}
@@ -62,8 +62,10 @@ function PurchaseModal({ products, onSave, onClose }) {
         </div>
 
         <div className="modal-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-gold" onClick={() => onSave({ date, supplier, store, notes, total, items })}>Registrar entrada</button>
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button className="btn btn-gold" onClick={() => onSave({ date, supplier, store, notes, total, items })} disabled={saving}>
+            {saving ? 'Guardando…' : 'Registrar entrada'}
+          </button>
         </div>
       </div>
     </div>
@@ -71,35 +73,63 @@ function PurchaseModal({ products, onSave, onClose }) {
 }
 
 export default function Inventory() {
-  const { products, usd, fdate } = useData()
+  const { products, categories, usd, fdate, showToast } = useData()
   const [purchases, setPurchases] = useState([])
   const [modal, setModal] = useState(false)
   const [tab, setTab] = useState('stock')
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => { loadPurchases() }, [])
 
   const loadPurchases = async () => {
-    const { data } = await supabase.from('purchases').select('*, purchase_items(*)').order('created_at', { ascending: false })
-    if (data) setPurchases(data)
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('purchases')
+      .select('*, purchase_items(*)')
+      .order('created_at', { ascending: false })
+    if (error) showToast?.('Error al cargar entradas')
+    else if (data) setPurchases(data)
     setLoading(false)
   }
 
   const savePurchase = async ({ date, supplier, store, notes, total, items }) => {
     const validItems = items.filter(i => i.product_id && i.qty > 0)
-    if (!validItems.length) return alert('Agrega al menos un producto')
-    const { data: purchase } = await supabase.from('purchases').insert({ date, supplier, store, notes, total }).select('id').single()
-    if (purchase) {
-      await supabase.from('purchase_items').insert(
-        validItems.map(i => ({ purchase_id: purchase.id, product_id: i.product_id, product_name: i.product_name, qty: i.qty, unit_cost: i.unit_cost, store }))
-      )
+    if (!validItems.length) { alert('Agrega al menos un producto'); return }
+    setSaving(true)
+    const { data: purchase, error: pErr } = await supabase
+      .from('purchases')
+      .insert({ date, supplier, store, notes, total })
+      .select('id')
+      .single()
+    if (pErr || !purchase) {
+      setSaving(false)
+      showToast?.('Error al guardar entrada')
+      return
+    }
+    const { error: iErr } = await supabase.from('purchase_items').insert(
+      validItems.map(i => ({
+        purchase_id: purchase.id,
+        product_id: i.product_id,
+        product_name: i.product_name,
+        qty: i.qty,
+        unit_cost: i.unit_cost,
+        store
+      }))
+    )
+    setSaving(false)
+    if (iErr) {
+      showToast?.('Entrada guardada con errores en items')
+    } else {
+      showToast?.('Entrada registrada · stock actualizado ✓')
     }
     await loadPurchases()
     setModal(false)
   }
 
-  const lowStockProducts = products.filter(p => p.stock_total >= 0 && p.stock_total <= (p.low_stock_alert || 3))
-  const outOfStock = products.filter(p => p.stock_total === 0)
+  const catName = (id) => categories.find(c => c.id === id)?.name || '—'
+  const lowStockProducts = products.filter(p => p.stock_total > 0 && p.stock_total <= (p.low_stock_alert || 3))
+  const outOfStock = products.filter(p => (p.stock_total ?? 0) === 0)
   const storeLbl = { ambas:'Ambas', tienda1:'Tienda 1', tienda2:'Tienda 2' }
 
   return (
@@ -133,22 +163,23 @@ export default function Inventory() {
             <thead><tr><th>Producto</th><th>Categoría</th><th>Tienda</th><th>Stock total</th><th>Tienda 1</th><th>Tienda 2</th><th>Estado stock</th></tr></thead>
             <tbody>
               {products.map(p => {
-                const isLow = p.stock_total >= 0 && p.stock_total <= (p.low_stock_alert || 3)
-                const isEmpty = p.stock_total === 0
+                const total = p.stock_total ?? 0
+                const isLow = total > 0 && total <= (p.low_stock_alert || 3)
+                const isEmpty = total === 0
                 return (
                   <tr key={p.id}>
                     <td><div style={{ display:'flex', alignItems:'center', gap:8 }}>
                       <div style={{ width:32, height:32, borderRadius:6, overflow:'hidden', flexShrink:0, background:'var(--gold-p)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14 }}>
-                        {p.images?.[0] ? <img src={p.images[0]} style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : p.emoji}
+                        {p.images?.[0] ? <img src={p.images[0]} alt={p.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : p.emoji}
                       </div>
                       <div><div style={{ fontWeight:500, fontSize:13 }}>{p.name}</div><div style={{ fontSize:11, color:'var(--muted)' }}>{p.ref}</div></div>
                     </div></td>
-                    <td><span className="tag tg-b">{p.cat_name || '—'}</span></td>
+                    <td><span className="tag tg-b">{catName(p.cat_id)}</span></td>
                     <td><span className="tag tg-gray">{storeLbl[p.store]||'Ambas'}</span></td>
-                    <td style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, fontWeight:400 }}>{p.stock_total}</td>
-                    <td>{p.stock_t1}</td>
-                    <td>{p.stock_t2}</td>
-                    <td>{isEmpty ? <span className="tag tg-r">Agotado</span> : isLow ? <span className="tag tg" style={{ background:'rgba(192,57,43,.1)', color:'var(--danger)' }}>⚠ Stock bajo</span> : <span className="tag tg-g">OK</span>}</td>
+                    <td style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, fontWeight:400 }}>{total}</td>
+                    <td>{p.stock_t1 ?? 0}</td>
+                    <td>{p.stock_t2 ?? 0}</td>
+                    <td>{isEmpty ? <span className="tag tg-r">Agotado</span> : isLow ? <span className="tag" style={{ background:'rgba(192,57,43,.1)', color:'var(--danger)' }}>⚠ Stock bajo</span> : <span className="tag tg-g">OK</span>}</td>
                   </tr>
                 )
               })}
@@ -170,13 +201,13 @@ export default function Inventory() {
                 <thead><tr><th>Producto</th><th>Tienda</th><th>Stock actual</th><th>Alerta en</th><th>T1</th><th>T2</th><th>Precio</th></tr></thead>
                 <tbody>
                   {lowStockProducts.map(p => (
-                    <tr key={p.id} style={{ background: p.stock_total === 0 ? 'rgba(192,57,43,.04)' : 'rgba(184,151,74,.04)' }}>
+                    <tr key={p.id} style={{ background: (p.stock_total ?? 0) === 0 ? 'rgba(192,57,43,.04)' : 'rgba(184,151,74,.04)' }}>
                       <td><strong>{p.name}</strong><br /><span style={{ fontSize:11, color:'var(--muted)' }}>{p.ref}</span></td>
                       <td><span className="tag tg-gray">{storeLbl[p.store]||'Ambas'}</span></td>
-                      <td><span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color: p.stock_total===0?'var(--danger)':'var(--gold)' }}>{p.stock_total}</span></td>
+                      <td><span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color: (p.stock_total??0)===0?'var(--danger)':'var(--gold)' }}>{p.stock_total ?? 0}</span></td>
                       <td style={{ fontSize:12, color:'var(--muted)' }}>{p.low_stock_alert||3} unidades</td>
-                      <td>{p.stock_t1}</td>
-                      <td>{p.stock_t2}</td>
+                      <td>{p.stock_t1 ?? 0}</td>
+                      <td>{p.stock_t2 ?? 0}</td>
                       <td style={{ fontFamily:'Cormorant Garamond,serif', fontSize:16, color:'var(--gold)' }}>{usd(p.price)}</td>
                     </tr>
                   ))}
@@ -211,7 +242,7 @@ export default function Inventory() {
         </div>
       )}
 
-      {modal && <PurchaseModal products={products} onSave={savePurchase} onClose={() => setModal(false)} />}
+      {modal && <PurchaseModal products={products} onSave={savePurchase} onClose={() => setModal(false)} saving={saving} />}
     </div>
   )
 }

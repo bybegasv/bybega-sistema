@@ -2,13 +2,14 @@ import { useData } from '../context/DataContext'
 import { useNavigate } from 'react-router-dom'
 
 export default function Dashboard() {
-  const { products, clients, opportunities, orders, invoices, usd, fdate, statusBadge, profile } = useData()
+  const { products, clients, opportunities, orders, invoices, usd, fdate, profile } = useData()
   const nav = useNavigate()
 
+  const orderStore = (id) => orders.find(o => o.id === id)?.store
   const paid = invoices.filter(i => i.paid).reduce((a, i) => a + Number(i.total), 0)
-  const paidT1 = invoices.filter(i => i.paid && (orders.find(o=>o.id===i.order_id)?.store === 'tienda1')).reduce((a,i) => a+Number(i.total), 0)
-  const paidT2 = invoices.filter(i => i.paid && (orders.find(o=>o.id===i.order_id)?.store === 'tienda2')).reduce((a,i) => a+Number(i.total), 0)
-  const lowStock = products.filter(p => p.stock_total >= 0 && p.stock_total <= (p.low_stock_alert || 3))
+  const paidT1 = invoices.filter(i => i.paid && orderStore(i.order_id) === 'tienda1').reduce((a, i) => a + Number(i.total), 0)
+  const paidT2 = invoices.filter(i => i.paid && orderStore(i.order_id) === 'tienda2').reduce((a, i) => a + Number(i.total), 0)
+  const lowStock = products.filter(p => p.stock_total > 0 && p.stock_total <= (p.low_stock_alert || 3))
   const pending = invoices.filter(i => !i.paid).reduce((a, i) => a + Number(i.total), 0)
   const activeOrders = orders.filter(o => ['confirmado', 'proceso', 'listo'].includes(o.status)).length
   const openOpps = opportunities.filter(o => !['ganada', 'perdida'].includes(o.stage)).length
@@ -63,7 +64,7 @@ export default function Dashboard() {
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {[['Productos disponibles', products.filter(p=>p.status==='disponible').length, 'tg-g'],
               ['Clientes en CRM', clients.length, 'tg-b'],
-              ['Pedidos activos', orders.filter(o=>['confirmado','proceso','listo'].includes(o.status)).length, 'tg'],
+              ['Pedidos activos', activeOrders, 'tg'],
               ['Facturas impagas', invoices.filter(i=>!i.paid).length, 'tg-r']
             ].map(([label, val, cls]) => (
               <div key={label} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 0', borderBottom:'1px solid rgba(0,0,0,.04)' }}>

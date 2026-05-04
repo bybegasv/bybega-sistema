@@ -45,23 +45,41 @@ export default function Settings() {
   }
 
   const inviteEmployee = async () => {
-    if (!newEmp.email || !newEmp.name) return
+    const email = newEmp.email.trim().toLowerCase()
+    const name = newEmp.name.trim()
+    if (!name) { showToast('El nombre es obligatorio'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { showToast('Email no válido'); return }
     setInviting(true)
-    const { error } = await supabase.auth.admin?.inviteUserByEmail
-      ? await supabase.auth.admin.inviteUserByEmail(newEmp.email, { data: { name: newEmp.name, role: newEmp.role } })
-      : { error: null }
 
-    // Fallback: signUp if admin invite not available
-    if (!supabase.auth.admin) {
-      const tempPass = 'bybega' + Math.random().toString(36).slice(2, 8)
-      const { error: e } = await supabase.auth.signUp({ email: newEmp.email, password: tempPass, options: { data: { name: newEmp.name, role: newEmp.role } } })
-      if (!e) { showToast(`Empleado creado. Contraseña temporal: ${tempPass}`); setNewEmp({ email:'', name:'', role:'vendedor' }); loadEmployees() }
-      else showToast('Error: ' + e.message)
-    } else if (!error) {
-      showToast('Invitación enviada a ' + newEmp.email)
-      setNewEmp({ email:'', name:'', role:'vendedor' })
-      loadEmployees()
+    // Generamos una contraseña aleatoria fuerte que el empleado nunca verá:
+    // pediremos un reset inmediato para que él mismo establezca la suya.
+    const arr = new Uint8Array(18)
+    crypto.getRandomValues(arr)
+    const tempPass = Array.from(arr, b => b.toString(36)).join('').slice(0, 24)
+
+    const { error: signErr } = await supabase.auth.signUp({
+      email, password: tempPass,
+      options: { data: { name, role: newEmp.role } }
+    })
+
+    if (signErr) {
+      showToast('No se pudo crear: ' + signErr.message)
+      setInviting(false)
+      return
     }
+
+    // Enviamos email de reset para que el empleado fije su contraseña
+    const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/login'
+    })
+
+    if (resetErr) {
+      showToast('Empleado creado, pero no se pudo enviar el email de invitación. Pídele que use "Olvidé mi contraseña" en el login.')
+    } else {
+      showToast('Invitación enviada a ' + email + ' · debe revisar su correo')
+    }
+    setNewEmp({ email:'', name:'', role:'vendedor' })
+    loadEmployees()
     setInviting(false)
   }
 
@@ -155,7 +173,7 @@ export default function Settings() {
             {inviting ? 'Creando…' : '+ Crear empleado'}
           </button>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8, lineHeight: 1.6 }}>
-            Se creará el usuario en Supabase Auth. El empleado podrá iniciar sesión con su email y la contraseña que se mostrará en pantalla.
+            Se creará el usuario en Supabase Auth y se le enviará un email para que él mismo establezca su contraseña.
           </div>
         </div>
       </div>

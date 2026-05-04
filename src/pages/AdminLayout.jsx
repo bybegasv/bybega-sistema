@@ -7,29 +7,22 @@ const NAV = [
   { section: 'Catálogo' },
   { to: '/admin/productos', label: 'Productos', icon: '◇' },
   { to: '/admin/categorias', label: 'Categorías', icon: '⊞' },
-  { to: '/admin/inventario', label: 'Inventario', icon: '◫' },
   { section: 'Ventas' },
   { to: '/admin/clientes', label: 'Clientes', icon: '◎' },
   { to: '/admin/oportunidades', label: 'Oportunidades', icon: '◉' },
   { to: '/admin/pedidos', label: 'Pedidos', icon: '▤' },
-  { to: '/admin/personalizados', label: 'Personalizados', icon: '✦' },
-  { to: '/admin/reparaciones', label: 'Reparaciones', icon: '⚒' },
   { to: '/admin/facturas', label: 'Facturas', icon: '◈' },
   { to: '/admin/entregas', label: 'Entregas', icon: '▷' },
-  { section: 'Finanzas' },
-  { to: '/admin/gastos', label: 'Gastos', icon: '◱' },
-  { to: '/admin/certificados', label: 'Certificados', icon: '◆' },
-  { section: 'Compras' },
-  { to: '/admin/proveedores', label: 'Proveedores', icon: '◧' },
+  { to: '/admin/inventario', label: 'Inventario', icon: '◫' },
   { section: 'Sistema' },
-  { to: '/admin/banners', label: 'Carrusel web', icon: '◫' },
   { to: '/admin/configuracion', label: 'Configuración', icon: '⚙' },
 ]
 
 export default function AdminLayout() {
   const { profile, logout } = useData()
   const nav = useNavigate()
-  const roleLabel = { admin:'Administrador', vendedor:'Vendedor', logistica:'Logística', lectura:'Solo lectura' }
+
+  const roleLabel = { admin: 'Administrador', vendedor: 'Vendedor', logistica: 'Logística', lectura: 'Solo lectura' }
 
   return (
     <div className="app-shell">
@@ -43,8 +36,7 @@ export default function AdminLayout() {
             item.section ? (
               <div className="sb-section" key={i}>{item.section}</div>
             ) : (
-              <NavLink key={item.to} to={item.to} end={item.end}
-                className={({ isActive }) => 'ni' + (isActive ? ' active' : '')}>
+              <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => 'ni' + (isActive ? ' active' : '')}>
                 <span className="ni-icon">{item.icon}</span>
                 <span>{item.label}</span>
               </NavLink>
@@ -59,7 +51,7 @@ export default function AdminLayout() {
         <div className="sb-user">
           <div className="sb-user-name">{profile?.name || 'Usuario'}</div>
           <div className="sb-user-role">{roleLabel[profile?.role] || profile?.role}</div>
-          <button className="logout-btn" onClick={() => { logout(); nav('/login') }}>← Salir</button>
+          <button className="logout-btn" onClick={async () => { await logout(); nav('/login') }}>← Salir</button>
         </div>
       </aside>
       <main className="main-area">
