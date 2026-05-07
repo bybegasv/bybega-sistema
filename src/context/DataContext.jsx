@@ -19,6 +19,8 @@ export function DataProvider({ children }) {
   const [deliveries, setDeliveries] = useState([])
   const [payments, setPayments] = useState([])
   const [events, setEvents] = useState([])
+  const [shifts, setShifts] = useState([])
+  const [currentShift, setCurrentShift] = useState(null)
   const [settings, setSettings] = useState({})
 
   const showToast = useCallback((msg) => {
@@ -66,6 +68,8 @@ export function DataProvider({ children }) {
       loadDeliveries()
       loadPayments()
       loadEvents()
+      loadShifts()
+      loadCurrentShift()
       loadSettings()
     }
   }, [user])
@@ -228,6 +232,136 @@ export function DataProvider({ children }) {
   const orderPayments = (orderId) => payments.filter(p => p.order_id === orderId)
   const orderPaid = (orderId) => orderPayments(orderId).reduce((a, p) => a + Number(p.amount || 0), 0)
 
+  // ── QUICK SALE (POS / Caja) ────────────────────
+  // Crea pedido + factura + abono en una sola operación.
+  // Si reuseOrderId se provee, usa ese pedido existente (reserva web que vino a recoger).
+  const quickSale = async ({ items, total, method, clientId, store = 'tienda1', reuseOrderId = null, notes = '' }) => {
+    let orderId = reuseOrderId
+    let invoiceNumber = null
+    const shiftId = currentShift?.id || null
+
+    try {
+      if (!reuseOrderId) {
+        // 1. Crear pedido nuevo (status confirmado para descontar stock)
+        const { data: newOrder, error: oErr } = await supabase.from('orders').insert({
+          client_id: clientId || null,
+          items,
+          subtotal: total,
+          iva_rate: 0,
+          iva_amt: 0,
+          total,
+          status: 'confirmado',
+          date: new Date().toISOString().slice(0, 10),
+          notes,
+          store,
+          payment_method: method,
+          source: 'local',
+          shift_id: shiftId
+        }).select('id').single()
+        if (oErr) throw oErr
+        orderId = newOrder.id
+      } else {
+        // 2. Pedido existente: pasa a confirmado (si estaba en pendiente) para descontar stock
+        await supabase.from('orders').update({
+          status: 'confirmado',
+          payment_method: method,
+          shift_id: shiftId
+        }).eq('id', reuseOrderId)
+      }
+
+      // 3. Crear factura
+      const { data: cnt } = await supabase.from('settings').select('value').eq('key', 'inv_counter').single()
+      const num = parseInt(cnt?.value || 1)
+      invoiceNumber = `BYB-${new Date().getFullYear()}-${String(num).padStart(3, '0')}`
+      await supabase.from('invoices').insert({
+        order_id: orderId, client_id: clientId || null, number: invoiceNumber,
+        subtotal: total, iva_rate: 0, iva_amt: 0,
+        total, date: new Date().toISOString().slice(0, 10), paid: true
+      })
+      await supabase.from('settings').update({ value: String(num + 1) }).eq('key', 'inv_counter')
+
+      // 4. Registrar el abono completo
+      await supabase.from('payments').insert({
+        order_id: orderId,
+        amount: total,
+        method,
+        date: new Date().toISOString().slice(0, 10),
+        reference: invoiceNumber,
+        notes: 'Venta en caja',
+        shift_id: shiftId
+      })
+
+      // 5. Marcar pedido como entregado (ya se cobró y el cliente se llevó)
+      await supabase.from('orders').update({ status: 'entregado' }).eq('id', orderId)
+
+      // Refrescar
+      await Promise.all([loadOrders(), loadInvoices(), loadPayments(), loadProducts()])
+      showToast(`✓ Venta ${invoiceNumber} registrada`)
+      return { orderId, invoiceNumber }
+    } catch (e) {
+      showToast('Error al registrar venta: ' + (e.message || e))
+      return null
+    }
+  }
+
+  // ── SHIFTS (turnos / cierre de caja) ──────────
+  const loadShifts = async () => {
+    const { data } = await supabase.from('shifts').select('*').order('opened_at', { ascending: false }).limit(100)
+    if (data) setShifts(data)
+  }
+  const loadCurrentShift = async () => {
+    if (!user) return
+    const { data } = await supabase.from('shifts')
+      .select('*')
+      .eq('user_id', user.id)
+      .is('closed_at', null)
+      .order('opened_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    setCurrentShift(data || null)
+  }
+  const openShift = async ({ store, opening_cash = 0, notes = '' }) => {
+    if (!user) return null
+    const { data, error } = await supabase.from('shifts').insert({
+      user_id: user.id,
+      user_name: profile?.name || (user.email || '').split('@')[0] || 'Cajera',
+      store, opening_cash, notes
+    }).select().single()
+    if (error) { showToast('Error al abrir turno: ' + error.message); return null }
+    setCurrentShift(data)
+    await loadShifts()
+    showToast('Turno abierto ✓')
+    return data
+  }
+  const closeShift = async ({ declared_cash, notes }) => {
+    if (!currentShift) return
+    const { error } = await supabase.from('shifts').update({
+      closed_at: new Date().toISOString(),
+      declared_cash: declared_cash ?? null,
+      notes: notes ?? currentShift.notes
+    }).eq('id', currentShift.id)
+    if (error) { showToast('Error al cerrar turno: ' + error.message); return }
+    setCurrentShift(null)
+    await loadShifts()
+    showToast('Turno cerrado ✓')
+  }
+  const shiftPayments = (shiftId) => payments.filter(p => p.shift_id === shiftId)
+  const shiftSummary = (shiftId) => {
+    const pays = shiftPayments(shiftId)
+    const sumMethod = m => pays.filter(p => p.method === m).reduce((a, p) => a + Number(p.amount || 0), 0)
+    return {
+      total: pays.reduce((a, p) => a + Number(p.amount || 0), 0),
+      cash: sumMethod('cash'),
+      transfer: sumMethod('transfer'),
+      wompi: sumMethod('wompi'),
+      n1co: sumMethod('n1co'),
+      paypal: sumMethod('paypal'),
+      card: sumMethod('card'),
+      count: pays.length,
+      payments: pays
+    }
+  }
+
   // ── EVENTS (citas / perforaciones) ────────────
   const loadEvents = async () => {
     const { data } = await supabase.from('events').select('*').order('start_at', { ascending: true })
@@ -313,8 +447,9 @@ export function DataProvider({ children }) {
       orders, saveOrder,
       invoices, createInvoice, markInvoicePaid,
       deliveries, saveDelivery,
-      payments, savePayment, deletePayment, orderPayments, orderPaid,
+      payments, savePayment, deletePayment, orderPayments, orderPaid, quickSale,
       events, saveEvent, deleteEvent,
+      shifts, currentShift, openShift, closeShift, shiftSummary, loadCurrentShift,
       settings, saveSetting, saveSettingsBatch,
       employees, loadEmployees,
       usd, fdate, catName, clientName, statusBadge, segBadge
