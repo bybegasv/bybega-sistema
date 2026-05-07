@@ -8,6 +8,8 @@ const NAV = [
   { to: '/admin/productos', label: 'Productos', icon: '◇' },
   { to: '/admin/categorias', label: 'Categorías', icon: '⊞' },
   { section: 'Ventas' },
+  { to: '/admin/caja',          label: 'Caja',          icon: '◊' },
+  { to: '/admin/turnos',        label: 'Turnos',        icon: '⟳' },
   { to: '/admin/eventos',       label: 'Eventos',       icon: '◷' },
   { to: '/admin/oportunidades', label: 'Oportunidades', icon: '◉' },
   { to: '/admin/pedidos',       label: 'Pedidos',       icon: '▤' },

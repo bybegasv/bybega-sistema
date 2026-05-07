@@ -13,7 +13,8 @@ export default function Settings() {
     pay_wompi_enabled:'false', pay_n1co_enabled:'false',
     bank_name:'', bank_account:'', bank_holder:'', bank_type:'cuenta corriente',
     paypal_link:'', card_link:'', wompi_link:'', n1co_link:'',
-    web_mode:'pedido'
+    web_mode:'pedido',
+    auto_print_ticket:'false'
   })
   const [empModal, setEmpModal] = useState(null)
   const [testResult, setTestResult] = useState('')
@@ -47,7 +48,8 @@ export default function Settings() {
         card_link:    settings.card_link    || '',
         wompi_link:   settings.wompi_link   || '',
         n1co_link:    settings.n1co_link    || '',
-        web_mode:     settings.web_mode     || 'pedido'
+        web_mode:     settings.web_mode     || 'pedido',
+        auto_print_ticket: settings.auto_print_ticket ?? 'false'
       }))
     }
   }, [settings])
@@ -272,6 +274,17 @@ export default function Settings() {
               <strong style={{ fontSize:13 }}>Solicitar cotización</strong>
               <div style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>El cliente solo expresa interés. Llega como oportunidad al CRM.</div>
             </label>
+          </div>
+        </div>
+
+        {/* Auto-imprimir ticket */}
+        <div style={{ paddingTop:14, marginTop:14, borderTop:'1px solid rgba(0,0,0,.08)' }}>
+          <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+            <input type="checkbox" checked={form.auto_print_ticket === 'true'} onChange={e => s('auto_print_ticket', e.target.checked ? 'true' : 'false')} />
+            <span style={{ fontWeight:500, fontSize:13 }}>🖨️ Imprimir ticket automáticamente al cerrar venta en caja</span>
+          </label>
+          <div style={{ fontSize:11, color:'var(--muted)', marginTop:4, paddingLeft:24 }}>
+            Cuando esté activo, después de cobrar en /admin/caja se abre automáticamente el diálogo de impresión con el ticket en formato 80mm. Si tu impresora térmica está como predeterminada en el navegador, sale directo.
           </div>
         </div>
 
