@@ -13,6 +13,8 @@ import Invoices from './pages/Invoices'
 import Deliveries from './pages/Deliveries'
 import Inventory from './pages/Inventory'
 import Events from './pages/Events'
+import POS from './pages/POS'
+import Shifts from './pages/Shifts'
 import Settings from './pages/Settings'
 import WebView from './pages/WebView'
 
@@ -47,6 +49,8 @@ export default function App() {
           <Route path="entregas" element={<Deliveries />} />
           <Route path="inventario" element={<Inventory />} />
           <Route path="eventos" element={<Events />} />
+          <Route path="caja" element={<POS />} />
+          <Route path="turnos" element={<Shifts />} />
           <Route path="configuracion" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/admin" replace />} />
