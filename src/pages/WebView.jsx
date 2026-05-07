@@ -11,9 +11,9 @@ export default function WebView() {
   const [categories, setCategories] = useState([])
   const [products, setProducts] = useState([])
   const [cat, setCat] = useState('todos')
-  const [selected, setSelected] = useState({})    // { id: qty }
+  const [selected, setSelected] = useState({})
   const [showCart, setShowCart] = useState(false)
-  const [submitted, setSubmitted] = useState(null) // null | { method, orderNum, total }
+  const [submitted, setSubmitted] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [qErr, setQErr] = useState('')
   const [form, setForm] = useState({ name:'', surname:'', email:'', phone:'', instagram:'', message:'', shipping_addr:'', payment_method:'' })
@@ -41,9 +41,7 @@ export default function WebView() {
       if (s) { const obj = {}; s.forEach(r => { obj[r.key] = r.value }); setSettings(obj) }
       if (c) setCategories(c)
       if (p) setProducts(p)
-    } catch {
-      setLoadErr(true)
-    }
+    } catch { setLoadErr(true) }
   }
 
   const usd = n => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
@@ -51,10 +49,7 @@ export default function WebView() {
 
   const isOrderMode = (settings.web_mode || 'pedido') === 'pedido'
   const ctaLabel = isOrderMode ? 'Realizar pedido' : 'Solicitar cotización'
-  const cartLabel = isOrderMode ? 'Tu pedido' : 'Tu cotización'
-  const addBtnLabel = (sel) => sel ? '✓ En el pedido' : (isOrderMode ? 'Añadir al pedido' : 'Seleccionar para cotización')
 
-  // Métodos disponibles según settings
   const availableMethods = []
   if (settings.pay_cash_enabled === 'true')     availableMethods.push('cash')
   if (settings.pay_transfer_enabled === 'true') availableMethods.push('transfer')
@@ -63,29 +58,21 @@ export default function WebView() {
   if (settings.pay_paypal_enabled === 'true')   availableMethods.push('paypal')
   if (settings.pay_card_enabled === 'true')     availableMethods.push('card')
 
-  const toggle = (id) => {
-    setSelected(prev => {
-      const next = { ...prev }
-      if (next[id]) delete next[id]
-      else next[id] = 1
-      return next
-    })
-  }
-  const setQty = (id, q) => {
-    setSelected(prev => {
-      const next = { ...prev }
-      const qty = Math.max(1, parseInt(q) || 1)
-      if (next[id] !== undefined) next[id] = qty
-      return next
-    })
-  }
+  const toggle = (id) => setSelected(prev => {
+    const n = { ...prev }; if (n[id]) delete n[id]; else n[id] = 1; return n
+  })
+  const setQty = (id, q) => setSelected(prev => {
+    const n = { ...prev }; const qty = Math.max(1, parseInt(q) || 1)
+    if (n[id] !== undefined) n[id] = qty; return n
+  })
 
   const selProducts = products.filter(p => selected[p.id]).map(p => ({ ...p, qty: selected[p.id] }))
   const selTotal = selProducts.reduce((a, p) => a + (Number(p.price) * p.qty), 0)
   const featured = products.filter(p => p.featured).slice(0, 5)
   const filtered = cat === 'todos' ? products : products.filter(p => p.cat_id === cat)
+  const selCount = Object.keys(selected).length
 
-  const sf = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
+  const sf = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   const sendWeb3Forms = async (key, payload) => {
     const r = await fetch('https://api.web3forms.com/submit', {
@@ -114,12 +101,10 @@ export default function WebView() {
     const prodNames = selProducts.map(p => `${p.name} x${p.qty} (${usd(Number(p.price) * p.qty)})`).join('\n')
 
     try {
-      // 1) Cliente
       let clientId = null
       const { data: existing } = await supabase.from('clients').select('id').eq('email', email).maybeSingle()
-      if (existing) {
-        clientId = existing.id
-      } else {
+      if (existing) clientId = existing.id
+      else {
         const { data: newClient, error: cErr } = await supabase.from('clients').insert({
           name, surname, email, phone, instagram: form.instagram.trim(),
           shipping_addr: form.shipping_addr.trim(),
@@ -130,7 +115,6 @@ export default function WebView() {
         clientId = newClient?.id
       }
 
-      // 2) Oportunidad
       if (clientId) {
         await supabase.from('opportunities').insert({
           client_id: clientId,
@@ -141,19 +125,14 @@ export default function WebView() {
         })
       }
 
-      // 3) Order (solo en modo pedido)
       let orderNum = null
       if (isOrderMode && clientId) {
         const items = selProducts.map(p => ({
           product_id: p.id, name: p.name, price: Number(p.price), qty: p.qty, sub: Number(p.price) * p.qty
         }))
         const { data: newOrder, error: oErr } = await supabase.from('orders').insert({
-          client_id: clientId,
-          items,
-          subtotal: selTotal,
-          iva_rate: 0,
-          iva_amt: 0,
-          total: selTotal,
+          client_id: clientId, items,
+          subtotal: selTotal, iva_rate: 0, iva_amt: 0, total: selTotal,
           status: 'pendiente',
           date: new Date().toISOString().slice(0, 10),
           notes: form.message || '',
@@ -164,7 +143,6 @@ export default function WebView() {
         if (!oErr && newOrder) orderNum = newOrder.id
       }
 
-      // 4) Email de aviso
       const key = settings.web3forms_key
       if (key) {
         const subject = isOrderMode
@@ -175,20 +153,17 @@ export default function WebView() {
           (isOrderMode ? `Dirección: ${form.shipping_addr || '—'}\nMétodo de pago: ${PAY_LBL[form.payment_method] || form.payment_method}\n` : '') +
           `\nPRODUCTOS:\n${prodNames}\nTotal: ${usd(selTotal)}\n\n` +
           `MENSAJE:\n${form.message || '(sin mensaje)'}\n\n---\n${isOrderMode ? `Pedido #${orderNum} creado en estado PENDIENTE.` : 'Oportunidad creada en CRM.'}`
-
         try {
           await sendWeb3Forms(key, {
             subject, name, email: settings.notif_email || settings.email,
             replyto: email, message: body
           })
-        } catch {
-          console.warn('Email failed; data saved')
-        }
+        } catch { console.warn('Email failed; data saved') }
       }
 
       setSubmitted({ method: form.payment_method, orderNum, total: selTotal })
       setSelected({})
-    } catch (e) {
+    } catch {
       setQErr('Hubo un error al enviar. Por favor intenta por WhatsApp.')
     }
     setSubmitting(false)
@@ -198,17 +173,16 @@ export default function WebView() {
     const name = contactForm.name.trim()
     const email = contactForm.email.trim().toLowerCase()
     const message = contactForm.message.trim()
-    if (!name) { setContactErr('Tu nombre es obligatorio'); return }
-    if (!EMAIL_RE.test(email)) { setContactErr('Email no válido'); return }
-    if (!message) { setContactErr('Escribe un mensaje'); return }
+    if (!name) return setContactErr('Tu nombre es obligatorio')
+    if (!EMAIL_RE.test(email)) return setContactErr('Email no válido')
+    if (!message) return setContactErr('Escribe un mensaje')
     setContactSending(true); setContactErr('')
 
     try {
       let clientId = null
       const { data: existing } = await supabase.from('clients').select('id').eq('email', email).maybeSingle()
-      if (existing) {
-        clientId = existing.id
-      } else {
+      if (existing) clientId = existing.id
+      else {
         const { data: newClient, error: cErr } = await supabase.from('clients').insert({
           name, email, phone: contactForm.phone.trim(),
           segment: 'nuevo', source: 'web',
@@ -217,7 +191,6 @@ export default function WebView() {
         if (cErr) throw cErr
         clientId = newClient?.id
       }
-
       if (clientId) {
         await supabase.from('opportunities').insert({
           client_id: clientId,
@@ -227,7 +200,6 @@ export default function WebView() {
           notes: message
         })
       }
-
       const key = settings.web3forms_key
       if (key) {
         try {
@@ -237,7 +209,7 @@ export default function WebView() {
             replyto: email,
             message: `MENSAJE WEB · ${settings.company || 'bybega'}\n\nNombre: ${name}\nEmail: ${email}\nTeléfono: ${contactForm.phone.trim() || '—'}\n\nMensaje:\n${message}`
           })
-        } catch { /* swallow */ }
+        } catch {}
       }
       setContactSent(true)
     } catch {
@@ -248,413 +220,562 @@ export default function WebView() {
 
   const wa = (settings.phone || '').replace(/\D/g, '')
 
+  const goTo = (id) => { document.getElementById(id)?.scrollIntoView({ behavior:'smooth' }); setMenuOpen(false) }
+
+  // Carousel render usado en cards de catálogo y destacados
   const renderImg = (p) => {
     const imgs = p.images?.length ? p.images : (p.image_url ? [p.image_url] : [])
     const idx = carouselIdx[p.id] || 0
-    if (!imgs.length) return <span style={{ fontSize:52 }}>{p.emoji}</span>
+    if (!imgs.length) return <span style={{ fontSize:60 }}>{p.emoji}</span>
     return (
       <>
-        <img src={imgs[idx]} alt={p.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+        <img src={imgs[idx]} alt={p.name} />
         {imgs.length > 1 && (
           <>
-            <button onClick={e => { e.stopPropagation(); setCarouselIdx(ci => ({...ci, [p.id]: (idx - 1 + imgs.length) % imgs.length})) }} aria-label="Anterior"
-              style={{ position:'absolute', left:6, top:'50%', transform:'translateY(-50%)', background:'rgba(0,0,0,.5)', color:'#fff', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center' }}>‹</button>
-            <button onClick={e => { e.stopPropagation(); setCarouselIdx(ci => ({...ci, [p.id]: (idx + 1) % imgs.length})) }} aria-label="Siguiente"
-              style={{ position:'absolute', right:6, top:'50%', transform:'translateY(-50%)', background:'rgba(0,0,0,.5)', color:'#fff', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center' }}>›</button>
-            <div style={{ position:'absolute', bottom:6, left:'50%', transform:'translateX(-50%)', display:'flex', gap:4 }}>
-              {imgs.map((_,i) => <div key={i} style={{ width:5, height:5, borderRadius:'50%', background: i===idx?'#fff':'rgba(255,255,255,.4)' }} />)}
+            <div className="mg-fp-arrows">
+              <button onClick={e => { e.stopPropagation(); setCarouselIdx(ci => ({...ci, [p.id]: (idx-1+imgs.length)%imgs.length})) }} aria-label="Anterior">‹</button>
+              <button onClick={e => { e.stopPropagation(); setCarouselIdx(ci => ({...ci, [p.id]: (idx+1)%imgs.length})) }} aria-label="Siguiente">›</button>
             </div>
+            <div className="mg-fp-dots">{imgs.map((_,i) => <div key={i} className={i===idx?'on':''} />)}</div>
           </>
         )}
       </>
     )
   }
 
-  const selCount = Object.keys(selected).length
-
-  // Pantalla de confirmación tras enviar pedido
+  // ─────────────────────────────────────────────
+  // PANTALLA DE ÉXITO POST-PEDIDO
+  // ─────────────────────────────────────────────
   if (submitted) {
     const m = submitted.method
+    const orderTag = submitted.orderNum ? '#' + String(submitted.orderNum).padStart(3,'0') : ''
     return (
-      <div className="qf-overlay" style={{ overflowY:'auto' }}>
-        <div className="qf-inner" style={{ paddingTop:60 }}>
-          <div style={{ textAlign:'center' }}>
-            <div style={{ fontSize:48, marginBottom:16 }}>✦</div>
-            <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:32, color:'var(--gold)', marginBottom:10 }}>
-              {isOrderMode ? '¡Pedido recibido!' : '¡Solicitud enviada!'}
+      <div className="mg-shell">
+        <div className="mg-overlay">
+          <div className="mg-overlay-inner">
+            <div className="mg-overlay-head">
+              <div className="mg-overlay-brand">{settings.company || 'bybega'}</div>
             </div>
-            {isOrderMode && submitted.orderNum && (
-              <div style={{ fontSize:14, color:'var(--muted)', marginBottom:20 }}>
-                Pedido <strong style={{ color:'var(--gold-l)' }}>#{String(submitted.orderNum).padStart(3,'0')}</strong> · Total {usd(submitted.total)}
+            <div className="mg-success">
+              <div style={{ fontSize:54, marginBottom:14 }}>✦</div>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:36, color:'var(--mg-gold)', fontStyle:'italic', marginBottom:8 }}>
+                {isOrderMode ? '¡Pedido recibido!' : '¡Solicitud enviada!'}
+              </div>
+              {isOrderMode && submitted.orderNum && (
+                <div style={{ fontSize:14, color:'var(--mg-mid)', marginBottom:24 }}>
+                  Pedido <strong>{orderTag}</strong> · Total <strong style={{ color:'var(--mg-gold)' }}>{usd(submitted.total)}</strong>
+                </div>
+              )}
+            </div>
+
+            {isOrderMode && m === 'transfer' && (
+              <div className="mg-success-card">
+                <h4>🏦 Datos para transferencia</h4>
+                <div style={{ fontSize:14, lineHeight:2.1, color:'var(--mg-mid)' }}>
+                  <div>Banco: <strong style={{ color:'var(--mg-black)' }}>{settings.bank_name || '—'}</strong></div>
+                  <div>Titular: <strong style={{ color:'var(--mg-black)' }}>{settings.bank_holder || '—'}</strong></div>
+                  <div>Cuenta ({settings.bank_type || '—'}): <strong style={{ color:'var(--mg-black)' }}>{settings.bank_account || '—'}</strong></div>
+                  <div>Referencia: <strong>Pedido {orderTag}</strong></div>
+                  <div>Monto: <strong style={{ color:'var(--mg-gold)' }}>{usd(submitted.total)}</strong></div>
+                </div>
+                <div style={{ marginTop:14, fontSize:12, color:'var(--mg-mid)' }}>
+                  Tras transferir, envíanos el comprobante por WhatsApp citando el pedido <strong>{orderTag}</strong>.
+                </div>
               </div>
             )}
-          </div>
 
-          {isOrderMode && m === 'transfer' && (
-            <div style={{ background:'rgba(184,151,74,.08)', border:'1px solid var(--border)', borderRadius:10, padding:24, marginBottom:20 }}>
-              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color:'var(--gold)', marginBottom:14 }}>🏦 Datos para transferencia</div>
-              <div style={{ fontSize:14, lineHeight:2.2, color:'#ddd' }}>
-                <div>Banco: <strong style={{ color:'#fff' }}>{settings.bank_name || '—'}</strong></div>
-                <div>Titular: <strong style={{ color:'#fff' }}>{settings.bank_holder || '—'}</strong></div>
-                <div>Cuenta ({settings.bank_type || '—'}): <strong style={{ color:'#fff' }}>{settings.bank_account || '—'}</strong></div>
-                <div>Referencia: <strong style={{ color:'#fff' }}>Pedido #{submitted.orderNum && String(submitted.orderNum).padStart(3,'0')}</strong></div>
-                <div>Monto: <strong style={{ color:'var(--gold-l)' }}>{usd(submitted.total)}</strong></div>
+            {isOrderMode && m === 'wompi' && settings.wompi_link && (
+              <div className="mg-success-card" style={{ textAlign:'center' }}>
+                <h4>💳 Pagar con Wompi</h4>
+                <a href={settings.wompi_link} target="_blank" rel="noreferrer"
+                   style={{ display:'inline-block', padding:'12px 28px', background:'#005FAA', color:'#fff', borderRadius:30, fontSize:14, fontWeight:500, textDecoration:'none' }}>
+                  Ir a Wompi · {usd(submitted.total)}
+                </a>
+                <div style={{ marginTop:12, fontSize:12, color:'var(--mg-mid)' }}>Indica en el concepto: Pedido {orderTag}</div>
               </div>
-              <div style={{ marginTop:14, fontSize:12, color:'var(--muted)' }}>
-                Tras transferir, envíanos el comprobante por WhatsApp citando el pedido <strong>#{submitted.orderNum && String(submitted.orderNum).padStart(3,'0')}</strong>.
+            )}
+
+            {isOrderMode && m === 'n1co' && settings.n1co_link && (
+              <div className="mg-success-card" style={{ textAlign:'center' }}>
+                <h4>📱 Pagar con N1co</h4>
+                <a href={settings.n1co_link} target="_blank" rel="noreferrer"
+                   style={{ display:'inline-block', padding:'12px 28px', background:'#7c3aed', color:'#fff', borderRadius:30, fontSize:14, fontWeight:500, textDecoration:'none' }}>
+                  Ir a N1co · {usd(submitted.total)}
+                </a>
+                <div style={{ marginTop:12, fontSize:12, color:'var(--mg-mid)' }}>Indica en el concepto: Pedido {orderTag}</div>
               </div>
-            </div>
-          )}
+            )}
 
-          {isOrderMode && m === 'paypal' && settings.paypal_link && (
-            <div style={{ background:'rgba(184,151,74,.08)', border:'1px solid var(--border)', borderRadius:10, padding:24, marginBottom:20, textAlign:'center' }}>
-              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color:'var(--gold)', marginBottom:14 }}>🅿️ Pagar con PayPal</div>
-              <a href={settings.paypal_link.startsWith('http') ? settings.paypal_link : `https://paypal.me/${settings.paypal_link}`} target="_blank" rel="noreferrer"
-                 style={{ display:'inline-block', padding:'12px 28px', background:'#0070ba', color:'#fff', borderRadius:8, fontSize:14, fontWeight:500, textDecoration:'none' }}>
-                Ir a PayPal · {usd(submitted.total)}
-              </a>
-              <div style={{ marginTop:12, fontSize:12, color:'var(--muted)' }}>Indica en el concepto: Pedido #{submitted.orderNum && String(submitted.orderNum).padStart(3,'0')}</div>
-            </div>
-          )}
-
-          {isOrderMode && m === 'wompi' && settings.wompi_link && (
-            <div style={{ background:'rgba(184,151,74,.08)', border:'1px solid var(--border)', borderRadius:10, padding:24, marginBottom:20, textAlign:'center' }}>
-              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color:'var(--gold)', marginBottom:14 }}>💳 Pagar con Wompi</div>
-              <a href={settings.wompi_link} target="_blank" rel="noreferrer"
-                 style={{ display:'inline-block', padding:'12px 28px', background:'#005FAA', color:'#fff', borderRadius:8, fontSize:14, fontWeight:500, textDecoration:'none' }}>
-                Ir a Wompi · {usd(submitted.total)}
-              </a>
-              <div style={{ marginTop:12, fontSize:12, color:'var(--muted)' }}>Indica en el concepto: Pedido #{submitted.orderNum && String(submitted.orderNum).padStart(3,'0')}</div>
-            </div>
-          )}
-
-          {isOrderMode && m === 'n1co' && settings.n1co_link && (
-            <div style={{ background:'rgba(184,151,74,.08)', border:'1px solid var(--border)', borderRadius:10, padding:24, marginBottom:20, textAlign:'center' }}>
-              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color:'var(--gold)', marginBottom:14 }}>📱 Pagar con N1co</div>
-              <a href={settings.n1co_link} target="_blank" rel="noreferrer"
-                 style={{ display:'inline-block', padding:'12px 28px', background:'#7c3aed', color:'#fff', borderRadius:8, fontSize:14, fontWeight:500, textDecoration:'none' }}>
-                Ir a N1co · {usd(submitted.total)}
-              </a>
-              <div style={{ marginTop:12, fontSize:12, color:'var(--muted)' }}>Indica en el concepto: Pedido #{submitted.orderNum && String(submitted.orderNum).padStart(3,'0')}</div>
-            </div>
-          )}
-
-          {isOrderMode && m === 'card' && settings.card_link && (
-            <div style={{ background:'rgba(184,151,74,.08)', border:'1px solid var(--border)', borderRadius:10, padding:24, marginBottom:20, textAlign:'center' }}>
-              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color:'var(--gold)', marginBottom:14 }}>🌐 Pagar online</div>
-              <a href={settings.card_link} target="_blank" rel="noreferrer"
-                 style={{ display:'inline-block', padding:'12px 28px', background:'var(--gold)', color:'var(--dark)', borderRadius:8, fontSize:14, fontWeight:500, textDecoration:'none' }}>
-                Ir al pago · {usd(submitted.total)}
-              </a>
-              <div style={{ marginTop:12, fontSize:12, color:'var(--muted)' }}>Indica en el concepto: Pedido #{submitted.orderNum && String(submitted.orderNum).padStart(3,'0')}</div>
-            </div>
-          )}
-
-          {isOrderMode && m === 'cash' && (
-            <div style={{ background:'rgba(184,151,74,.08)', border:'1px solid var(--border)', borderRadius:10, padding:24, marginBottom:20 }}>
-              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color:'var(--gold)', marginBottom:10 }}>💵 Pago contra entrega</div>
-              <div style={{ fontSize:14, color:'#ddd', lineHeight:1.7 }}>
-                Tu pedido fue recibido. Te contactaremos por WhatsApp para coordinar la entrega y el cobro en efectivo.
+            {isOrderMode && m === 'paypal' && settings.paypal_link && (
+              <div className="mg-success-card" style={{ textAlign:'center' }}>
+                <h4>🅿️ Pagar con PayPal</h4>
+                <a href={settings.paypal_link.startsWith('http') ? settings.paypal_link : `https://paypal.me/${settings.paypal_link}`} target="_blank" rel="noreferrer"
+                   style={{ display:'inline-block', padding:'12px 28px', background:'#0070ba', color:'#fff', borderRadius:30, fontSize:14, fontWeight:500, textDecoration:'none' }}>
+                  Ir a PayPal · {usd(submitted.total)}
+                </a>
+                <div style={{ marginTop:12, fontSize:12, color:'var(--mg-mid)' }}>Indica en el concepto: Pedido {orderTag}</div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div style={{ fontSize:14, color:'var(--muted)', lineHeight:1.8, maxWidth:520, margin:'0 auto', textAlign:'center' }}>
-            También recibirás los detalles en tu correo. Si tienes cualquier duda, escríbenos por WhatsApp.
-          </div>
-          <div style={{ textAlign:'center', marginTop:32 }}>
-            <button onClick={() => { setSubmitted(null); setShowCart(false); setForm({ name:'', surname:'', email:'', phone:'', instagram:'', message:'', shipping_addr:'', payment_method:'' }) }}
-              style={{ background:'var(--gold)', color:'var(--dark)', border:'none', padding:'12px 28px', borderRadius:8, fontSize:14, cursor:'pointer', fontFamily:'DM Sans,sans-serif' }}>
-              Seguir explorando →
-            </button>
+            {isOrderMode && m === 'card' && settings.card_link && (
+              <div className="mg-success-card" style={{ textAlign:'center' }}>
+                <h4>🌐 Pagar online</h4>
+                <a href={settings.card_link} target="_blank" rel="noreferrer"
+                   style={{ display:'inline-block', padding:'12px 28px', background:'var(--mg-gold)', color:'var(--mg-black)', borderRadius:30, fontSize:14, fontWeight:600, textDecoration:'none' }}>
+                  Ir al pago · {usd(submitted.total)}
+                </a>
+                <div style={{ marginTop:12, fontSize:12, color:'var(--mg-mid)' }}>Indica en el concepto: Pedido {orderTag}</div>
+              </div>
+            )}
+
+            {isOrderMode && m === 'cash' && (
+              <div className="mg-success-card">
+                <h4>💵 Pago contra entrega</h4>
+                <div style={{ fontSize:14, color:'var(--mg-mid)', lineHeight:1.7 }}>
+                  Tu pedido fue recibido. Te contactaremos por WhatsApp para coordinar la entrega y el cobro en efectivo.
+                </div>
+              </div>
+            )}
+
+            <div style={{ fontSize:14, color:'var(--mg-mid)', lineHeight:1.8, maxWidth:520, margin:'0 auto', textAlign:'center', marginTop:24 }}>
+              También recibirás los detalles en tu correo. Cualquier duda, escríbenos por WhatsApp.
+            </div>
+            <div style={{ textAlign:'center', marginTop:32 }}>
+              <button className="mg-btn-black" onClick={() => { setSubmitted(null); setShowCart(false); setForm({ name:'', surname:'', email:'', phone:'', instagram:'', message:'', shipping_addr:'', payment_method:'' }) }}>
+                Seguir explorando<span className="mg-arrow"></span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
     )
   }
 
+  // ─────────────────────────────────────────────
+  // PÁGINA PRINCIPAL
+  // ─────────────────────────────────────────────
   return (
-    <div className="web-shell">
-      <nav className="web-nav" style={{ position:'sticky', top:0, zIndex:20 }}>
-        <div className="web-logo">{settings.company || 'bybega'}</div>
-        <div className="web-nav-links" style={{ display:'flex' }}>
-          <button onClick={() => document.getElementById('web-hero')?.scrollIntoView({ behavior:'smooth' })}>Inicio</button>
-          {featured.length > 0 && <button onClick={() => document.getElementById('web-featured')?.scrollIntoView({ behavior:'smooth' })}>Destacados</button>}
-          <button onClick={() => document.getElementById('web-catalog')?.scrollIntoView({ behavior:'smooth' })}>Catálogo</button>
-          <button onClick={() => document.getElementById('web-contact')?.scrollIntoView({ behavior:'smooth' })}>Contacto</button>
-        </div>
-        <button onClick={() => setMenuOpen(p => !p)} aria-label="Menú" style={{ display:'none', background:'none', border:'none', color:'var(--gold)', fontSize:22, cursor:'pointer', padding:'0 4px', fontFamily:'monospace' }} className="web-hamburger">
-          {menuOpen ? '✕' : '☰'}
-        </button>
-      </nav>
-      {menuOpen && (
-        <div style={{ background:'var(--dark2)', borderBottom:'1px solid var(--border)', padding:'12px 24px', display:'flex', flexDirection:'column', gap:2, position:'sticky', top:57, zIndex:19 }}>
-          {[['web-hero','Inicio'],['web-featured','Destacados'],['web-catalog','Catálogo'],['web-contact','Contacto']].map(([id,label]) => (
-            <button key={id} onClick={() => { document.getElementById(id)?.scrollIntoView({ behavior:'smooth' }); setMenuOpen(false) }}
-              style={{ background:'none', border:'none', color:'var(--muted)', fontSize:14, cursor:'pointer', fontFamily:'DM Sans,sans-serif', padding:'10px 0', textAlign:'left', borderBottom:'1px solid rgba(255,255,255,.04)' }}>
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+    <div className="mg-shell">
 
-      <div id="web-hero" className="web-hero">
-        <div className="web-hero-title">
-          {(settings.slogan || 'Joyas que cuentan tu historia').split(' ').map((w, i, arr) =>
-            i === Math.floor(arr.length / 2) ? <em key={i}>{w} </em> : w + ' '
-          )}
+      {/* NAV */}
+      <nav className="mg-nav">
+        <div className="mg-brand">by<b>{(settings.company || 'bybega').replace(/^by/i,'')}</b></div>
+        <div className="mg-nav-links">
+          <button onClick={() => goTo('mg-hero')}>Inicio</button>
+          {featured.length > 0 && <button onClick={() => goTo('mg-featured')}>Destacados</button>}
+          <button onClick={() => goTo('mg-catalog')}>Catálogo</button>
+          <button onClick={() => goTo('mg-process')}>Proceso</button>
+          <button onClick={() => goTo('mg-atelier')}>Atelier</button>
+          <button onClick={() => goTo('mg-contact')}>Contacto</button>
         </div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8, letterSpacing: 1, textTransform: 'uppercase' }}>
-          {(settings.company || 'bybega').toUpperCase()} · JOYERÍA ARTESANAL · EL SALVADOR
-        </div>
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 24 }}>
-          <button className="web-cta web-cta-gold" onClick={() => document.getElementById('web-catalog')?.scrollIntoView({ behavior: 'smooth' })}>Ver colección</button>
-          <button className="web-cta web-cta-outline" onClick={() => window.open(`https://wa.me/${wa}?text=Hola! Me gustaría ver el catálogo de bybega.`, '_blank')}>WhatsApp</button>
-        </div>
-        {loadErr && <div style={{ color:'#e57373', fontSize:12, marginTop:16 }}>No pudimos cargar el catálogo. Por favor recarga la página.</div>}
+        <button className="mg-nav-cta" onClick={() => goTo('mg-catalog')}>{ctaLabel.split(' ')[0]} pieza</button>
+        <button className="mg-burger" aria-label="Menú" onClick={() => setMenuOpen(o => !o)}>{menuOpen ? '✕' : '☰'}</button>
+      </nav>
+      <div className={`mg-mobile ${menuOpen ? 'open' : ''}`}>
+        {[['mg-hero','Inicio'],['mg-featured','Destacados'],['mg-catalog','Catálogo'],['mg-process','Proceso'],['mg-atelier','Atelier'],['mg-contact','Contacto']].map(([id,label]) => (
+          <button key={id} onClick={() => goTo(id)}>{label}</button>
+        ))}
       </div>
 
+      {/* HERO */}
+      <section className="mg-hero" id="mg-hero">
+        <div className="mg-hero-num">'{new Date().getFullYear().toString().slice(-2)}</div>
+        <div className="mg-hero-text">
+          <div className="mg-hero-eyebrow">{settings.company || 'bybega'} · Joyería artesanal</div>
+          <h1 className="mg-hero-title">
+            {(settings.slogan || 'Joyas que cuentan tu historia').split(' ').map((w,i,arr) =>
+              i === Math.floor(arr.length/2) ? <em key={i}>{w} </em> : w + ' '
+            )}
+          </h1>
+          <p className="mg-hero-sub">Diseño contemporáneo. Oficio centenario. Piezas hechas a mano en {settings.address || 'El Salvador'}, una a una, para que duren generaciones.</p>
+          <div className="mg-hero-actions">
+            <button className="mg-btn-black" onClick={() => goTo('mg-catalog')}>Ver colección<span className="mg-arrow"></span></button>
+            <button className="mg-btn-text" onClick={() => goTo('mg-atelier')}>Conocer el atelier <span className="mg-arrow"></span></button>
+          </div>
+          {loadErr && <div style={{ color:'#c0392b', fontSize:12, marginTop:14 }}>No pudimos cargar el catálogo. Recarga la página.</div>}
+        </div>
+        {featured[0] && (featured[0].images?.[0] || featured[0].image_url) ? (
+          <div className="mg-hero-img">
+            <img src={featured[0].images?.[0] || featured[0].image_url} alt={featured[0].name} />
+            <div className="mg-hero-img-meta">
+              <div className="mg-hero-img-meta-num">{products.length}+</div>
+              <div className="mg-hero-img-meta-text"><strong>Piezas únicas</strong>en colección</div>
+            </div>
+          </div>
+        ) : (
+          <div className="mg-hero-img">
+            <div style={{ width:'100%', aspectRatio:'4/5', borderRadius:4, background:'linear-gradient(135deg,#f5ead8 0%,#e8dcc8 100%)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:120, color:'#b8974a' }}>✦</div>
+            <div className="mg-hero-img-meta">
+              <div className="mg-hero-img-meta-num">{products.length || '—'}</div>
+              <div className="mg-hero-img-meta-text"><strong>Piezas únicas</strong>en colección</div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* MARQUEE */}
+      <div className="mg-marquee">
+        <div className="mg-marquee-track">
+          <span>Hecho a mano</span><span>Oro 18k certificado</span><span>Diseño exclusivo</span><span>Garantía de por vida</span><span>Envíos a todo El Salvador</span>
+          <span>Hecho a mano</span><span>Oro 18k certificado</span><span>Diseño exclusivo</span><span>Garantía de por vida</span><span>Envíos a todo El Salvador</span>
+        </div>
+      </div>
+
+      {/* DESTACADOS */}
       {featured.length > 0 && (
-        <div id="web-featured" className="web-section">
-          <div className="web-section-title">Piezas Destacadas</div>
-          <div className="web-section-sub">selección especial</div>
-          <div className="web-divider" />
-          <div className="web-featured-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 20 }}>
-            {featured.map(p => (
-              <div key={p.id} className={`web-card${selected[p.id] ? ' sel' : ''}`}>
-                <div className="web-card-img" style={{ padding:0, overflow:'hidden', position:'relative' }}>
+        <section className="mg-section" id="mg-featured">
+          <div className="mg-section-head">
+            <div className="mg-section-head-left">
+              <div className="mg-section-num">— 01</div>
+              <div className="mg-section-eyebrow">Lo más codiciado</div>
+              <h2 className="mg-section-title">Piezas <em>destacadas</em> de la temporada.</h2>
+            </div>
+            <button className="mg-section-link" onClick={() => goTo('mg-catalog')}>Ver todo <span className="mg-arrow"></span></button>
+          </div>
+          <div className="mg-feat-grid">
+            {featured.map((p, i) => (
+              <article key={p.id} className={`mg-fp ${i === 0 ? 'mg-fp-big' : ''} ${selected[p.id] ? 'sel' : ''}`}>
+                <div className="mg-fp-img">
                   {renderImg(p)}
-                  <span className="web-feat-badge">★ Dest.</span>
-                  {selected[p.id] && <span className="web-check">✓</span>}
+                  {p.featured && <span className="mg-fp-tag">★ Destacado</span>}
+                  <span className="mg-fp-num">{String(i+1).padStart(2,'0')}</span>
+                  {selected[p.id] && <span className="mg-fp-check">✓</span>}
                 </div>
-                <div className="web-card-body">
-                  <div className="web-card-name">{p.name}</div>
-                  <div className="web-card-mat">{p.material}</div>
-                  <div style={{ display:'flex', alignItems:'baseline', gap:8, marginTop:8, flexWrap:'wrap' }}>
-                    {p.original_price && Number(p.original_price) > Number(p.price) && <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:16, color:'rgba(255,255,255,.35)', textDecoration:'line-through' }}>{usd(p.original_price)}</span>}
-                    <span className="web-card-price" style={{ marginTop:0 }}>{usd(p.price)}</span>
-                    {p.original_price && Number(p.original_price) > Number(p.price) && <span style={{ background:'rgba(192,57,43,.7)', color:'#fff', fontSize:10, padding:'2px 6px', borderRadius:4, fontWeight:500 }}>-{Math.round((1-p.price/p.original_price)*100)}%</span>}
+                <div className="mg-fp-body">
+                  <h3 className="mg-fp-name">{p.name}</h3>
+                  <div className="mg-fp-mat">{p.material || catName(p.cat_id)}</div>
+                  <div className="mg-fp-foot">
+                    <span>
+                      {p.original_price && Number(p.original_price) > Number(p.price) && (
+                        <span className="mg-fp-price-old">{usd(p.original_price)}</span>
+                      )}
+                      <span className="mg-fp-price">{usd(p.price)}</span>
+                      {p.original_price && Number(p.original_price) > Number(p.price) && (
+                        <span className="mg-fp-disc" style={{ marginLeft:6 }}>-{Math.round((1-p.price/p.original_price)*100)}%</span>
+                      )}
+                    </span>
+                    <button className={`mg-fp-cta ${selected[p.id] ? 'on' : ''}`} onClick={() => toggle(p.id)}>
+                      {selected[p.id] ? '✓ En el pedido' : 'Añadir al pedido →'}
+                    </button>
                   </div>
-                  <button className={`web-card-btn${selected[p.id] ? ' sel-active' : ''}`} onClick={() => toggle(p.id)}>
-                    {addBtnLabel(selected[p.id])}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* CATÁLOGO */}
+      <section className="mg-section mg-catalog" id="mg-catalog">
+        <div className="mg-section-head">
+          <div className="mg-section-head-left">
+            <div className="mg-section-num">— 02</div>
+            <div className="mg-section-eyebrow">Catálogo completo</div>
+            <h2 className="mg-section-title">Toda la <em>colección</em>.</h2>
+          </div>
+        </div>
+        <div className="mg-catalog-bar">
+          <div className="mg-catalog-tools">
+            <button className={`mg-cat-btn ${cat === 'todos' ? 'active' : ''}`} onClick={() => setCat('todos')}>Todas ({products.length})</button>
+            {categories.map(c => {
+              const cnt = products.filter(p => p.cat_id === c.id).length
+              return cnt > 0 ? (
+                <button key={c.id} className={`mg-cat-btn ${cat === c.id ? 'active' : ''}`} onClick={() => setCat(c.id)}>{c.name} ({cnt})</button>
+              ) : null
+            })}
+          </div>
+          <div className="mg-catalog-meta">{filtered.length} {filtered.length === 1 ? 'pieza' : 'piezas'} · ordenado por novedad</div>
+        </div>
+        <div className="mg-catalog-grid">
+          {filtered.map((p, i) => (
+            <article key={p.id} className={`mg-fp ${selected[p.id] ? 'sel' : ''}`}>
+              <div className="mg-fp-img">
+                {renderImg(p)}
+                {p.featured && <span className="mg-fp-tag">★</span>}
+                <span className="mg-fp-num">{String(i+1).padStart(2,'0')}</span>
+                {selected[p.id] && <span className="mg-fp-check">✓</span>}
+              </div>
+              <div className="mg-fp-body">
+                <h3 className="mg-fp-name">{p.name}</h3>
+                <div className="mg-fp-mat">{p.material} {p.material && '·'} {catName(p.cat_id)}</div>
+                <div className="mg-fp-foot">
+                  <span>
+                    {p.original_price && Number(p.original_price) > Number(p.price) && (
+                      <span className="mg-fp-price-old">{usd(p.original_price)}</span>
+                    )}
+                    <span className="mg-fp-price">{usd(p.price)}</span>
+                  </span>
+                  <button className={`mg-fp-cta ${selected[p.id] ? 'on' : ''}`} onClick={() => toggle(p.id)}>
+                    {selected[p.id] ? '✓' : '+ Añadir →'}
                   </button>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div id="web-catalog" className="web-section">
-        <div className="web-section-title">Catálogo Completo</div>
-        <div className="web-section-sub">{products.length} piezas disponibles · {isOrderMode ? 'arma tu pedido' : 'selecciona varias para cotizar juntas'}</div>
-        <div className="web-divider" />
-        <div className="web-cats">
-          <button className={`web-cat-btn${cat === 'todos' ? ' active' : ''}`} onClick={() => setCat('todos')}>Todos ({products.length})</button>
-          {categories.map(c => {
-            const cnt = products.filter(p => p.cat_id === c.id).length
-            return cnt > 0 ? (
-              <button key={c.id} className={`web-cat-btn${cat === c.id ? ' active' : ''}`} onClick={() => setCat(c.id)}>
-                {c.name} ({cnt})
-              </button>
-            ) : null
-          })}
-        </div>
-        <div className="web-grid">
-          {filtered.map(p => (
-            <div key={p.id} className={`web-card${selected[p.id] ? ' sel' : ''}`}>
-              <div className="web-card-img" style={{ padding:0, overflow:'hidden', position:'relative' }}>
-                {renderImg(p)}
-                {p.featured && <span className="web-feat-badge">★ Dest.</span>}
-                {selected[p.id] && <span className="web-check">✓</span>}
-              </div>
-              <div className="web-card-body">
-                <div className="web-card-name">{p.name}</div>
-                <div className="web-card-mat">{p.material} · {catName(p.cat_id)}</div>
-                <div style={{ display:'flex', alignItems:'baseline', gap:8, marginTop:8, flexWrap:'wrap' }}>
-                  {p.original_price && Number(p.original_price) > Number(p.price) && <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:16, color:'rgba(255,255,255,.35)', textDecoration:'line-through' }}>{usd(p.original_price)}</span>}
-                  <span className="web-card-price" style={{ marginTop:0 }}>{usd(p.price)}</span>
-                  {p.original_price && Number(p.original_price) > Number(p.price) && <span style={{ background:'rgba(192,57,43,.7)', color:'#fff', fontSize:10, padding:'2px 6px', borderRadius:4, fontWeight:500 }}>-{Math.round((1-p.price/p.original_price)*100)}%</span>}
-                </div>
-                <button className={`web-card-btn${selected[p.id] ? ' sel-active' : ''}`} onClick={() => toggle(p.id)}>
-                  {addBtnLabel(selected[p.id])}
-                </button>
-                <button className="web-card-btn" style={{ opacity: .7, marginTop: 4 }} onClick={() => window.open(`https://wa.me/${wa}?text=${encodeURIComponent(`Hola! Me interesa "${p.name}" de bybega. ¿Está disponible?`)}`, '_blank')}>
-                  Consultar por WhatsApp
-                </button>
-              </div>
-            </div>
+            </article>
           ))}
+          {filtered.length === 0 && (
+            <div style={{ gridColumn:'1/-1', textAlign:'center', padding:'60px 20px', color:'var(--mg-mid)' }}>No hay piezas en esta categoría.</div>
+          )}
         </div>
-      </div>
+      </section>
 
-      <div id="web-contact" className="web-section">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48 }}>
-          <div>
-            <div className="web-section-title">Contáctanos</div>
-            <div className="web-section-sub">respuesta en menos de 24h</div>
-            <div className="web-divider" />
-            <div style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 2.2 }}>
-              {settings.email && <div>✉ {settings.email}</div>}
-              {settings.phone && <div>📱 {settings.phone}</div>}
-              {settings.instagram && <div>📷 {settings.instagram}</div>}
-              {settings.address && <div>📍 {settings.address}</div>}
-            </div>
-            <button onClick={() => window.open(`https://wa.me/${wa}?text=${encodeURIComponent('Hola! Me gustaría consultar sobre sus joyas.')}`, '_blank')}
-              style={{ marginTop: 20, background: '#25d366', color: '#fff', border: 'none', borderRadius: 8, padding: '11px 22px', fontSize: 13, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 500 }}>
-              💬 Escribir por WhatsApp
-            </button>
+      {/* PROCESO */}
+      <section className="mg-section mg-process" id="mg-process">
+        <div className="mg-section-head">
+          <div className="mg-section-head-left">
+            <div className="mg-section-num">— 03</div>
+            <div className="mg-section-eyebrow">Cómo trabajamos</div>
+            <h2 className="mg-section-title">El <em>proceso</em>, paso a paso.</h2>
           </div>
-          <div>
-            <div className="web-section-title">Envíanos un mensaje</div>
-            <div className="web-section-sub">también puedes escribirnos aquí</div>
-            <div className="web-divider" />
+        </div>
+        <div className="mg-proc-grid">
+          <div className="mg-proc">
+            <div className="mg-proc-num">— 01 —</div>
+            <div className="mg-proc-icon">✎</div>
+            <h3>Diseño en boceto</h3>
+            <p>Conversamos contigo y dibujamos a mano la pieza. Ajustamos hasta que sea exactamente lo que imaginas.</p>
+          </div>
+          <div className="mg-proc">
+            <div className="mg-proc-num">— 02 —</div>
+            <div className="mg-proc-icon">◇</div>
+            <h3>Selección de material</h3>
+            <p>Eliges el metal (oro 18k, plata 925) y la gema. Todo certificado y de origen verificado.</p>
+          </div>
+          <div className="mg-proc">
+            <div className="mg-proc-num">— 03 —</div>
+            <div className="mg-proc-icon">✦</div>
+            <h3>Hecho a mano</h3>
+            <p>Una sola orfebre trabaja tu pieza de principio a fin: martillado, engaste, pulido. Sin máquinas en serie.</p>
+          </div>
+          <div className="mg-proc">
+            <div className="mg-proc-num">— 04 —</div>
+            <div className="mg-proc-icon">♡</div>
+            <h3>Entrega y garantía</h3>
+            <p>Empaque artesanal. Ajuste de talla, pulido y reparación gratis de por vida.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* ATELIER */}
+      <section className="mg-atelier" id="mg-atelier">
+        <div className="mg-atelier-wrap">
+          <div className="mg-atelier-img">
+            <div className="mg-atelier-deco"></div>
+            {featured[1] && (featured[1].images?.[0] || featured[1].image_url) ? (
+              <img src={featured[1].images?.[0] || featured[1].image_url} alt="Atelier" />
+            ) : (
+              <div style={{ width:'100%', aspectRatio:'4/5', borderRadius:6, background:'linear-gradient(135deg,#f5ead8,#e8dcc8)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:80, color:'#b8974a' }}>✦</div>
+            )}
+            <div className="mg-atelier-deco-num">'{new Date(settings.created_at || Date.now()).getFullYear().toString().slice(-2)}</div>
+          </div>
+          <div className="mg-atelier-text">
+            <div className="mg-section-num">— 04</div>
+            <div className="mg-section-eyebrow">Sobre nosotras</div>
+            <h2 className="mg-section-title">Un atelier <em>familiar</em>.</h2>
+            <p>{settings.company || 'bybega'} nació como un proyecto de familia. Hoy somos un equipo pequeño de orfebres con una obsesión compartida: el detalle.</p>
+            <p>No fabricamos en serie. Cada joya pasa por las manos de una sola persona, de principio a fin — y eso se nota cuando la usas.</p>
+            <div className="mg-atelier-stats">
+              <div><div className="mg-as-num">{products.length}+</div><div className="mg-as-lbl">Piezas únicas</div></div>
+              <div><div className="mg-as-num">{categories.length}</div><div className="mg-as-lbl">Colecciones</div></div>
+              <div><div className="mg-as-num">100%</div><div className="mg-as-lbl">Hecho a mano</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA BANNER */}
+      <section className="mg-cta-banner">
+        <div className="mg-cta-eyebrow">¿Tienes algo en mente?</div>
+        <h2 className="mg-cta-title">Diseñemos una pieza <em>solo para ti</em>.</h2>
+        <p className="mg-cta-sub">Cuéntanos qué imaginas. Te respondemos personalmente en menos de 24 horas con un boceto y cotización.</p>
+        <button className="mg-btn-black" onClick={() => goTo('mg-contact')}>{ctaLabel}<span className="mg-arrow"></span></button>
+      </section>
+
+      {/* CONTACTO */}
+      <section className="mg-contact" id="mg-contact">
+        <div className="mg-contact-wrap">
+          <div className="mg-contact-info">
+            <div className="mg-section-num">— 05</div>
+            <div className="mg-section-eyebrow">Hablemos</div>
+            <h2 className="mg-section-title">Cuéntanos qué <em>imaginas</em>.</h2>
+            <p>Respondemos cada mensaje personalmente. Si lo prefieres, escríbenos por WhatsApp y conversemos.</p>
+            <div className="mg-contact-list">
+              {settings.email     && <div className="mg-contact-row"><div className="mg-contact-icon">✉</div><div><strong>Correo</strong><span>{settings.email}</span></div></div>}
+              {settings.phone     && <div className="mg-contact-row"><div className="mg-contact-icon">📱</div><div><strong>WhatsApp</strong><span>{settings.phone}</span></div></div>}
+              {settings.instagram && <div className="mg-contact-row"><div className="mg-contact-icon">◎</div><div><strong>Instagram</strong><span>{settings.instagram}</span></div></div>}
+              {settings.address   && <div className="mg-contact-row"><div className="mg-contact-icon">📍</div><div><strong>Atelier</strong><span>{settings.address}</span></div></div>}
+            </div>
+            {wa && (
+              <button onClick={() => window.open(`https://wa.me/${wa}?text=${encodeURIComponent('Hola! Me gustaría consultar sobre sus joyas.')}`, '_blank')}
+                style={{ marginTop:24, background:'#25d366', color:'#fff', border:'none', borderRadius:30, padding:'13px 24px', fontSize:13, cursor:'pointer', fontWeight:600 }}>
+                💬 Escribir por WhatsApp
+              </button>
+            )}
+          </div>
+
+          <form className="mg-form" onSubmit={e => { e.preventDefault(); submitContactForm() }}>
+            <div className="mg-form-title">Envíanos un mensaje</div>
+            <div className="mg-form-sub">Te respondemos en menos de 24 horas</div>
             {contactSent ? (
-              <div style={{ textAlign: 'center', padding: '32px 0' }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>✦</div>
-                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 22, color: 'var(--gold)', marginBottom: 8 }}>¡Mensaje enviado!</div>
-                <div style={{ fontSize: 13, color: 'var(--muted)' }}>Te responderemos pronto.</div>
-                <button onClick={() => { setContactSent(false); setContactForm({ name:'', email:'', phone:'', message:'' }) }}
-                  style={{ marginTop: 16, background: 'transparent', border: '1px solid rgba(184,151,74,.4)', color: 'var(--gold)', padding: '8px 18px', borderRadius: 6, fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+              <div style={{ textAlign:'center', padding:'24px 0' }}>
+                <div style={{ fontSize:36, marginBottom:12 }}>✦</div>
+                <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:24, color:'var(--mg-gold)', marginBottom:8, fontStyle:'italic' }}>¡Mensaje enviado!</div>
+                <div style={{ fontSize:13, color:'var(--mg-mid)' }}>Te responderemos pronto.</div>
+                <button type="button" onClick={() => { setContactSent(false); setContactForm({ name:'', email:'', phone:'', message:'' }) }}
+                  style={{ marginTop:16, background:'transparent', border:'1px solid var(--mg-line)', color:'var(--mg-black)', padding:'8px 18px', borderRadius:30, fontSize:12, cursor:'pointer' }}>
                   Enviar otro mensaje
                 </button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div><label className="qf-label">Nombre *</label>
-                    <input className="qf-input" maxLength={80} value={contactForm.name} onChange={e => setContactForm(p => ({...p, name: e.target.value}))} placeholder="Tu nombre" /></div>
-                  <div><label className="qf-label">Teléfono</label>
-                    <input className="qf-input" maxLength={30} value={contactForm.phone} onChange={e => setContactForm(p => ({...p, phone: e.target.value}))} placeholder="+503 7000-0000" /></div>
+              <>
+                <div className="mg-form-row">
+                  <div><label>Nombre *</label><input maxLength={80} value={contactForm.name} onChange={e => setContactForm(p => ({...p, name: e.target.value}))} /></div>
+                  <div><label>Teléfono</label><input maxLength={30} value={contactForm.phone} onChange={e => setContactForm(p => ({...p, phone: e.target.value}))} /></div>
                 </div>
-                <div><label className="qf-label">Email *</label>
-                  <input className="qf-input" type="email" maxLength={120} value={contactForm.email} onChange={e => setContactForm(p => ({...p, email: e.target.value}))} placeholder="tu@email.com" /></div>
-                <div><label className="qf-label">Mensaje *</label>
-                  <textarea className="qf-input" maxLength={1500} rows={3} value={contactForm.message} onChange={e => setContactForm(p => ({...p, message: e.target.value}))} placeholder="¿En qué podemos ayudarte?" style={{ resize: 'vertical' }} /></div>
-                {contactErr && <div style={{ color: '#e57373', fontSize: 12 }}>{contactErr}</div>}
-                <button onClick={submitContactForm} disabled={contactSending}
-                  style={{ background: 'var(--gold)', color: 'var(--dark)', border: 'none', padding: '12px', borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', opacity: contactSending ? .7 : 1 }}>
+                <div style={{ marginBottom:14 }}><label>Email *</label><input type="email" maxLength={120} value={contactForm.email} onChange={e => setContactForm(p => ({...p, email: e.target.value}))} /></div>
+                <div style={{ marginBottom:14 }}><label>Mensaje *</label><textarea maxLength={1500} rows={4} value={contactForm.message} onChange={e => setContactForm(p => ({...p, message: e.target.value}))} /></div>
+                {contactErr && <div style={{ color:'#c0392b', fontSize:12, marginBottom:10 }}>{contactErr}</div>}
+                <button type="submit" className="mg-form-button" disabled={contactSending}>
                   {contactSending ? 'Enviando…' : 'Enviar mensaje →'}
                 </button>
-              </div>
+              </>
             )}
+          </form>
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="mg-footer">
+        <div className="mg-foot">
+          <div className="mg-foot-brand">
+            <div className="mg-brand">by<b>{(settings.company || 'bybega').replace(/^by/i,'')}</b></div>
+            <p>{settings.slogan || 'Joyas hechas a mano'}<br />{settings.address}</p>
+          </div>
+          <div>
+            <h5>Catálogo</h5>
+            <ul>{categories.map(c => <li key={c.id} onClick={() => { setCat(c.id); goTo('mg-catalog') }}>{c.name}</li>)}</ul>
+          </div>
+          <div>
+            <h5>Atelier</h5>
+            <ul>
+              <li onClick={() => goTo('mg-atelier')}>Sobre nosotras</li>
+              <li onClick={() => goTo('mg-process')}>Proceso</li>
+              <li onClick={() => goTo('mg-contact')}>Contacto</li>
+            </ul>
+          </div>
+          <div>
+            <h5>Contacto</h5>
+            <ul>
+              {settings.email     && <li>{settings.email}</li>}
+              {settings.phone     && <li>{settings.phone}</li>}
+              {settings.instagram && <li>{settings.instagram}</li>}
+            </ul>
           </div>
         </div>
-      </div>
-
-      <footer className="web-footer">
-        <div>
-          <div className="web-footer-logo">{settings.company || 'bybega'}</div>
-          <div className="web-footer-sub">{settings.slogan}<br />{settings.address}</div>
-        </div>
-        <div>
-          <div className="web-footer-title">Contacto</div>
-          <div className="web-footer-link">{settings.email}</div>
-          <div className="web-footer-link">{settings.phone}</div>
-          <div className="web-footer-link">{settings.instagram}</div>
-        </div>
-        <div>
-          <div className="web-footer-title">Colecciones</div>
-          {categories.map(c => <div key={c.id} className="web-footer-link">{c.name}</div>)}
+        <div className="mg-foot-base">
+          <div>© {new Date().getFullYear()} {settings.company || 'bybega'} · Todos los derechos reservados</div>
+          <div>Hecho con cuidado en El Salvador</div>
         </div>
       </footer>
 
+      {/* WHATSAPP FAB */}
+      {wa && <a className="mg-wa" href={`https://wa.me/${wa}?text=${encodeURIComponent('Hola! Me gustaría ver el catálogo.')}`} target="_blank" rel="noreferrer" style={{ bottom: selCount > 0 && !showCart ? 100 : 30 }}>💬</a>}
+
+      {/* SELECTION BAR */}
       {selCount > 0 && !showCart && (
-        <div className="web-sel-bar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ color: 'var(--gold)', fontFamily: 'Cormorant Garamond, serif', fontSize: 20 }}>{selCount} producto{selCount !== 1 ? 's' : ''}</span>
-            <span style={{ color: 'var(--muted)', fontSize: 12 }}>en {cartLabel.toLowerCase()} · {usd(selTotal)}</span>
+        <div className="mg-sel-bar">
+          <div className="mg-sel-bar-text">
+            <strong>{selCount} {selCount === 1 ? 'pieza' : 'piezas'}</strong>
+            <span>seleccionadas · total {usd(selTotal)}</span>
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => setSelected({})} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.15)', color: 'var(--muted)', padding: '9px 18px', borderRadius: 8, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontSize: 13 }}>Limpiar</button>
-            <button className="web-cta web-cta-gold" style={{ padding: '10px 24px', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontSize: 14, fontWeight: 500, background: 'var(--gold)', color: 'var(--dark)' }} onClick={() => { setShowCart(true); setForm({ name:'', surname:'', email:'', phone:'', instagram:'', message:'', shipping_addr:'', payment_method: availableMethods[0] || '' }) }}>
-              {ctaLabel} →
+          <div style={{ display:'flex', gap:10 }}>
+            <button onClick={() => setSelected({})} style={{ background:'transparent', border:'1px solid rgba(255,255,255,.2)', color:'rgba(255,255,255,.7)', padding:'10px 18px', borderRadius:30, fontSize:13, cursor:'pointer' }}>Limpiar</button>
+            <button onClick={() => { setShowCart(true); setForm(p => ({ ...p, payment_method: availableMethods[0] || '' })) }}
+              style={{ background:'var(--mg-gold)', color:'var(--mg-black)', border:'none', padding:'10px 24px', borderRadius:30, fontSize:13, fontWeight:600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:8 }}>
+              {ctaLabel}<span className="mg-arrow"></span>
             </button>
           </div>
         </div>
       )}
 
+      {/* CART OVERLAY */}
       {showCart && (
-        <div className="qf-overlay">
-          <div className="qf-inner">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
-              <button onClick={() => setShowCart(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 13, fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 6 }}>← Volver al catálogo</button>
-              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 22, color: 'var(--gold)', letterSpacing: 2 }}>{settings.company || 'bybega'}</div>
+        <div className="mg-overlay">
+          <div className="mg-overlay-inner">
+            <div className="mg-overlay-head">
+              <button className="mg-overlay-back" onClick={() => setShowCart(false)}>← Volver al catálogo</button>
+              <div className="mg-overlay-brand">{settings.company || 'bybega'}</div>
             </div>
 
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 30, color: '#fff', fontWeight: 300, marginBottom: 4 }}>{cartLabel}</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 28 }}>
-              {isOrderMode ? 'Confirma cantidades, datos y método de pago' : 'Te respondemos en menos de 24 horas'}
-            </div>
+            <div className="mg-section-num">— Tu {isOrderMode ? 'pedido' : 'cotización'}</div>
+            <h2 className="mg-section-title" style={{ marginBottom:32 }}>
+              {isOrderMode ? <>Confirma tu <em>pedido</em>.</> : <>Tu <em>cotización</em>.</>}
+            </h2>
 
-            {/* Productos seleccionados con cantidad */}
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Productos</div>
-              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                {selProducts.map(p => (
-                  <div key={p.id} style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 8, padding: '12px 14px', display:'grid', gridTemplateColumns:'48px 1fr 90px 80px 28px', gap:12, alignItems:'center' }}>
-                    <div style={{ width:48, height:48, borderRadius:6, overflow:'hidden', background:'rgba(255,255,255,.03)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:24 }}>
-                      {p.images?.[0] ? <img src={p.images[0]} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : p.emoji}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, color: '#fff', fontWeight: 500 }}>{p.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{usd(p.price)} c/u</div>
-                    </div>
-                    <input type="number" min="1" value={p.qty} onChange={e => setQty(p.id, e.target.value)}
-                      style={{ background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.1)', color:'#fff', padding:'7px 10px', borderRadius:6, fontSize:13, width:80 }} />
-                    <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 18, color: 'var(--gold)', textAlign:'right' }}>{usd(Number(p.price) * p.qty)}</span>
-                    <button onClick={() => toggle(p.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 14, cursor: 'pointer' }}>✕</button>
+            {/* Productos seleccionados */}
+            <div style={{ marginBottom:28 }}>
+              <div className="mg-section-eyebrow" style={{ marginBottom:12 }}>Productos</div>
+              {selProducts.map(p => (
+                <div key={p.id} className="mg-cart-row">
+                  <div className="img">{p.images?.[0] ? <img src={p.images[0]} alt="" /> : (p.image_url ? <img src={p.image_url} alt="" /> : p.emoji)}</div>
+                  <div>
+                    <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:18 }}>{p.name}</div>
+                    <div style={{ fontSize:11, color:'var(--mg-mid)' }}>{usd(p.price)} c/u</div>
                   </div>
-                ))}
-              </div>
-              <div style={{ marginTop: 14, padding: '12px 16px', background: 'rgba(184,151,74,.08)', border: '1px solid var(--border)', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 13, color: 'var(--muted)' }}>Total</span>
-                <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 22, color: 'var(--gold)' }}>{usd(selTotal)}</span>
+                  <input className="qty" type="number" min="1" value={p.qty} onChange={e => setQty(p.id, e.target.value)} />
+                  <span className="price" style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color:'var(--mg-gold)', textAlign:'right' }}>{usd(Number(p.price) * p.qty)}</span>
+                  <button className="del" onClick={() => toggle(p.id)} style={{ background:'none', border:'none', color:'var(--mg-mid)', fontSize:16, cursor:'pointer' }}>✕</button>
+                </div>
+              ))}
+              <div className="mg-cart-total">
+                <span style={{ fontSize:13, color:'var(--mg-mid)' }}>Total</span>
+                <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:26, color:'var(--mg-gold)', fontStyle:'italic' }}>{usd(selTotal)}</span>
               </div>
             </div>
 
-            {/* Datos de contacto */}
-            <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,.06)' }}>Tus datos</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-              <div><label className="qf-label">Nombre *</label><input className="qf-input" maxLength={80} value={form.name} onChange={e => sf('name', e.target.value)} placeholder="Tu nombre" /></div>
-              <div><label className="qf-label">Apellido {isOrderMode && '*'}</label><input className="qf-input" maxLength={80} value={form.surname} onChange={e => sf('surname', e.target.value)} placeholder="Tu apellido" /></div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-              <div><label className="qf-label">Email *</label><input className="qf-input" type="email" maxLength={120} value={form.email} onChange={e => sf('email', e.target.value)} placeholder="tu@email.com" /></div>
-              <div><label className="qf-label">Teléfono / WhatsApp {isOrderMode && '*'}</label><input className="qf-input" maxLength={30} value={form.phone} onChange={e => sf('phone', e.target.value)} placeholder="+503 7000-0000" /></div>
-            </div>
-            {isOrderMode && (
-              <div style={{ marginBottom: 14 }}>
-                <label className="qf-label">Dirección de envío</label>
-                <input className="qf-input" maxLength={200} value={form.shipping_addr} onChange={e => sf('shipping_addr', e.target.value)} placeholder="Dirección completa o 'recogeré en tienda'" />
+            {/* Datos */}
+            <div className="mg-section-eyebrow" style={{ marginBottom:12, paddingTop:18, borderTop:'1px solid var(--mg-line)' }}>Tus datos</div>
+            <div className="mg-form" style={{ padding:0, background:'transparent', borderRadius:0 }}>
+              <div className="mg-form-row">
+                <div><label>Nombre *</label><input maxLength={80} value={form.name} onChange={e => sf('name', e.target.value)} /></div>
+                <div><label>Apellido {isOrderMode && '*'}</label><input maxLength={80} value={form.surname} onChange={e => sf('surname', e.target.value)} /></div>
               </div>
-            )}
-            <div style={{ marginBottom: 14 }}>
-              <label className="qf-label">Instagram (opcional)</label>
-              <input className="qf-input" maxLength={60} value={form.instagram} onChange={e => sf('instagram', e.target.value)} placeholder="@tuusuario" />
-            </div>
-            <div style={{ marginBottom: 24 }}>
-              <label className="qf-label">Mensaje / detalles</label>
-              <textarea className="qf-input" maxLength={1500} rows={2} value={form.message} onChange={e => sf('message', e.target.value)} placeholder="Talla, ocasión, personalización…" style={{ resize: 'vertical' }} />
+              <div className="mg-form-row">
+                <div><label>Email *</label><input type="email" maxLength={120} value={form.email} onChange={e => sf('email', e.target.value)} /></div>
+                <div><label>WhatsApp {isOrderMode && '*'}</label><input maxLength={30} value={form.phone} onChange={e => sf('phone', e.target.value)} /></div>
+              </div>
+              {isOrderMode && (
+                <div style={{ marginBottom:14 }}>
+                  <label>Dirección de envío</label>
+                  <input maxLength={200} value={form.shipping_addr} onChange={e => sf('shipping_addr', e.target.value)} placeholder="Dirección completa o 'recogeré en tienda'" />
+                </div>
+              )}
+              <div style={{ marginBottom:14 }}>
+                <label>Instagram (opcional)</label>
+                <input maxLength={60} value={form.instagram} onChange={e => sf('instagram', e.target.value)} placeholder="@tuusuario" />
+              </div>
+              <div style={{ marginBottom:isOrderMode ? 14 : 24 }}>
+                <label>Mensaje / detalles</label>
+                <textarea maxLength={1500} rows={2} value={form.message} onChange={e => sf('message', e.target.value)} placeholder="Talla, ocasión, personalización…" />
+              </div>
             </div>
 
-            {/* Métodos de pago — solo en modo pedido */}
+            {/* Métodos de pago */}
             {isOrderMode && availableMethods.length > 0 && (
               <>
-                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,.06)' }}>Método de pago *</div>
-                <div style={{ display:'grid', gap:10, marginBottom:24 }}>
+                <div className="mg-section-eyebrow" style={{ marginBottom:12, paddingTop:18, borderTop:'1px solid var(--mg-line)' }}>Método de pago *</div>
+                <div style={{ display:'grid', gap:8, marginBottom:24 }}>
                   {availableMethods.map(m => (
-                    <label key={m} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 16px', background: form.payment_method === m ? 'rgba(184,151,74,.12)' : 'rgba(255,255,255,.03)', border: `1px solid ${form.payment_method === m ? 'var(--gold)' : 'rgba(255,255,255,.08)'}`, borderRadius:10, cursor:'pointer' }}>
-                      <input type="radio" name="pmethod" value={m} checked={form.payment_method === m} onChange={() => sf('payment_method', m)} style={{ accentColor: 'var(--gold)' }} />
-                      <span style={{ fontSize:22 }}>{PAY_ICON[m]}</span>
+                    <label key={m} className={`mg-pay-card ${form.payment_method === m ? 'sel' : ''}`}>
+                      <input type="radio" name="pmethod" value={m} checked={form.payment_method === m} onChange={() => sf('payment_method', m)} style={{ accentColor:'var(--mg-gold)' }} />
+                      <span className="ico">{PAY_ICON[m]}</span>
                       <div style={{ flex:1 }}>
-                        <div style={{ fontSize:14, color:'#fff', fontWeight:500 }}>{PAY_LBL[m]}</div>
-                        {m === 'transfer' && settings.bank_name && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{settings.bank_name} · te pasaremos los datos al confirmar</div>}
-                        {m === 'cash' && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>Pagarás al recibir tu pedido</div>}
-                        {m === 'wompi' && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>Pago seguro con tarjeta vía Wompi (BAC)</div>}
-                        {m === 'n1co' && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>Pago digital con N1co</div>}
-                        {m === 'paypal' && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>Te enviaremos el link de pago</div>}
-                        {m === 'card' && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>Pago online seguro</div>}
+                        <div style={{ fontSize:14, fontWeight:500 }}>{PAY_LBL[m]}</div>
+                        {m === 'transfer' && settings.bank_name && <div style={{ fontSize:11, color:'var(--mg-mid)', marginTop:2 }}>{settings.bank_name} · te pasaremos los datos al confirmar</div>}
+                        {m === 'cash' && <div style={{ fontSize:11, color:'var(--mg-mid)', marginTop:2 }}>Pagarás al recibir tu pedido</div>}
+                        {m === 'wompi' && <div style={{ fontSize:11, color:'var(--mg-mid)', marginTop:2 }}>Pago seguro con tarjeta vía Wompi (BAC)</div>}
+                        {m === 'n1co' && <div style={{ fontSize:11, color:'var(--mg-mid)', marginTop:2 }}>Pago digital con N1co</div>}
+                        {m === 'paypal' && <div style={{ fontSize:11, color:'var(--mg-mid)', marginTop:2 }}>Te enviaremos el link de pago</div>}
+                        {m === 'card' && <div style={{ fontSize:11, color:'var(--mg-mid)', marginTop:2 }}>Pago online seguro</div>}
                       </div>
                     </label>
                   ))}
@@ -662,19 +783,16 @@ export default function WebView() {
               </>
             )}
 
-            {qErr && <div style={{ color: '#e57373', fontSize: 12, marginBottom: 10 }}>{qErr}</div>}
-            <button onClick={submitOrder} disabled={submitting || selCount === 0}
-              style={{ width: '100%', background: 'var(--gold)', color: 'var(--dark)', border: 'none', padding: 15, borderRadius: 10, fontSize: 15, fontWeight: 500, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', opacity: submitting || selCount === 0 ? .6 : 1 }}>
+            {qErr && <div style={{ color:'#c0392b', fontSize:13, marginBottom:12 }}>{qErr}</div>}
+            <button className="mg-form-button" onClick={submitOrder} disabled={submitting || selCount === 0}>
               {submitting ? 'Enviando…' : `${ctaLabel} · ${usd(selTotal)} →`}
             </button>
-            <div style={{ textAlign: 'center', marginTop: 14, fontSize: 11, color: 'var(--muted)' }}>
+            <div style={{ textAlign:'center', marginTop:14, fontSize:11, color:'var(--mg-mid)' }}>
               {isOrderMode ? 'Al enviar, recibiremos tu pedido y te contactaremos para confirmar.' : 'Al enviar aceptas que nos contactemos contigo.'}
             </div>
           </div>
         </div>
       )}
-
-      <a className="web-wa" href={`https://wa.me/${wa}?text=${encodeURIComponent('Hola! Me gustaría ver el catálogo de bybega.')}`} target="_blank" rel="noreferrer" style={{ bottom: selCount > 0 && !showCart ? 90 : 24 }} aria-label="WhatsApp">💬</a>
     </div>
   )
 }
