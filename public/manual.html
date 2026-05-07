@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>bybega · Manual de uso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --gold:#b8974a; --gold-l:#d4af6a; --gold-d:#7a5e18; --gold-p:#f5ead8;
+  --dark:#1a1714; --mid:#4a4238; --muted:#8a7d6e; --light:#f7f3ee; --white:#fff;
+  --info:#1a5276; --success:#2e7d52; --danger:#c0392b;
+  --border:rgba(0,0,0,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:60px}
+body{font-family:'Inter',sans-serif;background:var(--light);color:var(--dark);line-height:1.7;font-size:15px;-webkit-font-smoothing:antialiased}
+img{max-width:100%}
+
+/* HEADER */
+.head{background:var(--dark);color:var(--gold-p);padding:50px 32px 60px;text-align:center;position:relative;overflow:hidden}
+.head::before{content:'bybega';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Cormorant Garamond',serif;font-size:clamp(160px,28vw,320px);color:rgba(184,151,74,.05);font-style:italic;font-weight:300;line-height:1;pointer-events:none;letter-spacing:-8px}
+.head > *{position:relative;z-index:2}
+.head h1{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:clamp(36px,5vw,54px);color:var(--gold);letter-spacing:1px;margin-bottom:8px}
+.head h1 em{font-style:italic;color:var(--gold-l)}
+.head p{font-size:14px;color:rgba(245,234,216,.65);letter-spacing:1px;text-transform:uppercase;margin-bottom:14px}
+.head .updated{font-size:12px;color:rgba(245,234,216,.5);font-style:italic}
+
+/* LAYOUT */
+.wrap{max-width:1100px;margin:0 auto;padding:0 32px;display:grid;grid-template-columns:240px 1fr;gap:48px}
+
+/* NAV */
+.nav{position:sticky;top:0;align-self:start;padding:32px 0;max-height:100vh;overflow-y:auto}
+.nav h4{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin:24px 0 8px;font-weight:600}
+.nav h4:first-child{margin-top:0}
+.nav a{display:block;padding:7px 0 7px 12px;font-size:13px;color:var(--mid);text-decoration:none;border-left:2px solid transparent;transition:all .15s}
+.nav a:hover{color:var(--gold-d);border-left-color:var(--gold);background:rgba(184,151,74,.04)}
+
+/* CONTENT */
+.content{padding:32px 0 80px;min-width:0}
+.section{margin-bottom:64px;scroll-margin-top:24px}
+.section:last-child{margin-bottom:0}
+.section h2{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:34px;color:var(--dark);margin-bottom:6px;line-height:1.15}
+.section h2 .num{color:var(--gold);font-style:italic;font-size:16px;display:block;margin-bottom:6px;font-weight:400;letter-spacing:2px;text-transform:uppercase}
+.section h2 em{color:var(--gold);font-style:italic}
+.section .sub{color:var(--muted);font-size:14px;font-style:italic;margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid var(--border)}
+.section h3{font-family:'Cormorant Garamond',serif;font-weight:500;font-size:22px;color:var(--dark);margin:28px 0 10px}
+.section h4{font-size:14px;letter-spacing:1px;text-transform:uppercase;color:var(--gold-d);margin:24px 0 10px;font-weight:600}
+.section p{margin-bottom:14px}
+.section ul,.section ol{margin:10px 0 18px 22px}
+.section li{margin-bottom:8px}
+.section li::marker{color:var(--gold)}
+
+/* HIGHLIGHT BOXES */
+.tip,.warn,.info,.steps{padding:18px 22px;border-radius:8px;margin:18px 0;font-size:14px;line-height:1.7}
+.tip{background:rgba(46,125,82,.06);border-left:3px solid var(--success)}
+.tip strong{color:var(--success)}
+.warn{background:rgba(192,57,43,.05);border-left:3px solid var(--danger)}
+.warn strong{color:var(--danger)}
+.info{background:rgba(26,82,118,.05);border-left:3px solid var(--info)}
+.info strong{color:var(--info)}
+.steps{background:rgba(184,151,74,.06);border-left:3px solid var(--gold)}
+.steps strong{color:var(--gold-d)}
+
+/* CODE / SHORTCUTS */
+code,kbd{font-family:'Courier New',monospace;background:rgba(0,0,0,.06);padding:2px 7px;border-radius:4px;font-size:13px;color:var(--gold-d)}
+kbd{border:1px solid rgba(0,0,0,.12);box-shadow:0 1px 0 rgba(0,0,0,.08)}
+
+/* TABLES */
+table{width:100%;border-collapse:collapse;margin:18px 0;background:var(--white);border-radius:8px;overflow:hidden;border:1px solid var(--border);font-size:13px}
+th{background:var(--gold-p);color:var(--gold-d);padding:12px 14px;text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;font-weight:600}
+td{padding:12px 14px;border-top:1px solid var(--border);vertical-align:top}
+td strong{color:var(--gold-d)}
+
+/* FAQ */
+.faq{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:14px 20px;margin-bottom:10px}
+.faq summary{cursor:pointer;font-weight:600;color:var(--dark);padding:6px 0;font-size:14px;list-style:none;display:flex;justify-content:space-between;align-items:center}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:'+';color:var(--gold);font-size:22px;transition:transform .2s}
+.faq[open] summary::after{transform:rotate(45deg)}
+.faq[open] summary{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.faq p{font-size:14px;color:var(--mid);margin:8px 0}
+
+/* FLOW ARROW */
+.flow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:18px 0;padding:18px 22px;background:var(--white);border:1px solid var(--border);border-radius:8px}
+.flow-step{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--mid)}
+.flow-step strong{color:var(--gold-d);font-family:'Cormorant Garamond',serif;font-size:18px;font-style:italic}
+.flow-arrow{color:var(--gold);font-size:18px}
+
+/* FOOTER */
+.foot{background:var(--dark);color:rgba(245,234,216,.6);padding:32px;text-align:center;font-size:12px;font-style:italic}
+
+/* MOBILE */
+@media(max-width:880px){
+  .wrap{grid-template-columns:1fr;gap:0;padding:0 20px}
+  .nav{position:static;max-height:none;background:var(--white);border-radius:8px;padding:20px;margin:24px 0;border:1px solid var(--border)}
+  .content{padding:8px 0 60px}
+  .section h2{font-size:28px}
+  .head{padding:36px 20px 44px}
+}
+@media print{
+  .nav{display:none}
+  .wrap{grid-template-columns:1fr}
+  body{font-size:12px}
+  .head{background:#fff;color:#000;padding:20px 0}
+  .head::before{display:none}
+  .head h1{color:#000}
+  .head h1 em{color:#7a5e18}
+  .section{page-break-inside:avoid}
+}
+
+/* TOC AUTO-NUMBERING */
+.intro-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:24px 0}
+.intro-card{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:18px;text-decoration:none;color:inherit;transition:all .2s;display:block}
+.intro-card:hover{border-color:var(--gold);transform:translateY(-2px);box-shadow:0 8px 20px -8px rgba(0,0,0,.1)}
+.intro-card .ico{font-size:24px;margin-bottom:8px;display:block}
+.intro-card h4{font-size:13px;color:var(--gold-d);margin:0 0 4px;letter-spacing:1px}
+.intro-card p{font-size:12px;color:var(--muted);margin:0;font-style:italic}
+</style>
+</head>
+<body>
+
+<header class="head">
+  <h1>Manual de <em>uso</em></h1>
+  <p>bybega · sistema de gestión integral</p>
+  <div class="updated">Versión 3 · Mayo 2026</div>
+</header>
+
+<div class="wrap">
+
+  <!-- NAV LATERAL -->
+  <nav class="nav">
+    <h4>Empezar</h4>
+    <a href="#intro">Introducción</a>
+    <a href="#login">Cómo entrar</a>
+    <a href="#dashboard">Dashboard</a>
+
+    <h4>Catálogo</h4>
+    <a href="#productos">Productos</a>
+    <a href="#categorias">Categorías</a>
+    <a href="#inventario">Inventario</a>
+
+    <h4>Ventas</h4>
+    <a href="#eventos">Eventos / citas</a>
+    <a href="#oportunidades">Oportunidades</a>
+    <a href="#pedidos">Pedidos</a>
+    <a href="#facturas">Facturas</a>
+    <a href="#entregas">Entregas</a>
+    <a href="#clientes">Clientes</a>
+
+    <h4>Sistema</h4>
+    <a href="#config">Configuración</a>
+    <a href="#pagos">Métodos de pago</a>
+    <a href="#empleados">Empleados</a>
+    <a href="#email">Notificaciones</a>
+
+    <h4>Web pública</h4>
+    <a href="#web">La tienda web</a>
+
+    <h4>Trucos</h4>
+    <a href="#flujo">Flujo de trabajo diario</a>
+    <a href="#faq">Preguntas frecuentes</a>
+    <a href="#problemas">Si algo falla</a>
+  </nav>
+
+  <main class="content">
+
+    <!-- INTRO -->
+    <section class="section" id="intro">
+      <h2><span class="num">— 00</span>Bienvenida a tu <em>sistema</em></h2>
+      <div class="sub">Lo que es y lo que hace, en una página.</div>
+
+      <p><strong>bybega</strong> es tu negocio en una sola pantalla. Maneja todo lo que pasa en tu joyería: el catálogo, los clientes, las ventas, los pagos, las entregas, las citas, y la web pública donde tus clientas compran.</p>
+
+      <p>Tienes <strong>dos partes</strong>:</p>
+      <ul>
+        <li><strong>El panel admin</strong> (<code>/admin</code>): solo tú y tu equipo. Aquí trabajas todos los días.</li>
+        <li><strong>La web pública</strong> (<code>/web</code>): lo que ven tus clientes. Catálogo + pedidos online.</li>
+      </ul>
+
+      <p>Todo se guarda en la nube — ningún archivo en tu computadora. Si pierdes el celular o se rompe la laptop, entras desde otro dispositivo y todo está intacto.</p>
+
+      <h3>Lo que puedes hacer</h3>
+      <div class="intro-grid">
+        <a class="intro-card" href="#productos"><span class="ico">◇</span><h4>Cargar joyas</h4><p>Hasta 5 fotos por pieza, precio, stock por tienda</p></a>
+        <a class="intro-card" href="#clientes"><span class="ico">◎</span><h4>Llevar el CRM</h4><p>Historial completo de cada clienta</p></a>
+        <a class="intro-card" href="#pedidos"><span class="ico">▤</span><h4>Vender</h4><p>Pedidos con abonos parciales y varios métodos</p></a>
+        <a class="intro-card" href="#eventos"><span class="ico">◷</span><h4>Agendar</h4><p>Citas y perforaciones con sync a Google Calendar</p></a>
+        <a class="intro-card" href="#inventario"><span class="ico">◫</span><h4>Stock</h4><p>Por tienda, alertas de stock bajo, entradas</p></a>
+        <a class="intro-card" href="#dashboard"><span class="ico">◈</span><h4>Ver el dinero</h4><p>Cuánto entró hoy, esta semana, este mes</p></a>
+      </div>
+
+      <div class="tip">
+        <strong>Consejo:</strong> Lee la sección <a href="#flujo">"Flujo de trabajo diario"</a> al final — te muestra el orden natural en que se usan los módulos. Si lees solo eso, ya sabes el 80% del sistema.
+      </div>
+    </section>
+
+    <!-- LOGIN -->
+    <section class="section" id="login">
+      <h2><span class="num">— 01</span>Cómo <em>entrar</em></h2>
+      <div class="sub">Tu llave de la casa.</div>
+
+      <p>Abre tu navegador (Chrome, Safari, Edge) y entra a:</p>
+      <p><code>https://www.bybegasv.online/login</code></p>
+
+      <div class="steps">
+        <strong>Pasos:</strong>
+        <ol>
+          <li>Escribe tu correo electrónico (el que registraste).</li>
+          <li>Escribe tu contraseña.</li>
+          <li>Clic en <strong>Entrar al sistema</strong>.</li>
+        </ol>
+      </div>
+
+      <p>Si todo está bien, te lleva al <strong>Dashboard</strong>. Si la contraseña está mal, te lo dice en rojo y vuelves a intentar.</p>
+
+      <h3>¿Olvidaste la contraseña?</h3>
+      <p>Avísale al administrador. Él entra a <strong>Configuración → Empleados</strong> y te puede invitar de nuevo, lo cual te manda un email para fijar una contraseña nueva.</p>
+
+      <div class="warn">
+        <strong>Importante:</strong> Nunca compartas tu contraseña con nadie. Si varias personas usan el sistema, cada una debe tener su propio usuario (Configuración → Empleados → Crear empleado).
+      </div>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section class="section" id="dashboard">
+      <h2><span class="num">— 02</span>El <em>Dashboard</em></h2>
+      <div class="sub">Tu pantalla de control. Lo primero que ves al entrar.</div>
+
+      <p>El Dashboard es un resumen de cómo va tu negocio HOY. No haces clic en nada para verlo — los números se actualizan solos.</p>
+
+      <h3>Qué muestra</h3>
+
+      <h4>1. Resumen de ventas (la barra de arriba)</h4>
+      <p>Cuánto dinero ha entrado en el periodo seleccionado, separado por método de pago. Tienes 3 botones para cambiar el periodo:</p>
+      <ul>
+        <li><strong>Día</strong> → solo lo de hoy.</li>
+        <li><strong>Semana</strong> → desde el lunes pasado.</li>
+        <li><strong>Mes</strong> → desde el día 1 del mes actual.</li>
+      </ul>
+      <p>Por cada método (Efectivo, Transferencia, Wompi, N1co, PayPal, Otra) ves la cantidad cobrada y cuántos pagos.</p>
+
+      <div class="tip">
+        <strong>Útil para:</strong> al cierre del día sabes cuánto tienes en caja vs. cuánto debería estar en el banco. Si los números no coinciden, alguien se equivocó al registrar.
+      </div>
+
+      <h4>2. Tarjetas grandes (4 indicadores)</h4>
+      <table>
+        <tr><th>Indicador</th><th>Qué significa</th></tr>
+        <tr><td><strong>Ingresos cobrados</strong></td><td>Total acumulado de TODAS las facturas pagadas (histórico).</td></tr>
+        <tr><td><strong>Por cobrar</strong></td><td>Facturas emitidas que aún no se pagan.</td></tr>
+        <tr><td><strong>Pedidos activos</strong></td><td>Pedidos en estado <em>confirmado</em>, <em>proceso</em> o <em>listo</em>.</td></tr>
+        <tr><td><strong>Oportunidades</strong></td><td>Leads que no se han ganado ni perdido.</td></tr>
+      </table>
+
+      <h4>3. Alerta de stock bajo (cuando aplica)</h4>
+      <p>Si tienes productos con stock bajo el umbral que tú definiste, aparece una franja roja con el botón <strong>"Ver inventario"</strong>.</p>
+
+      <h4>4. Ventas por tienda</h4>
+      <p>Si vendes en 2 tiendas, ves cuánto vendió cada una. Si solo tienes una, deja la otra en cero.</p>
+
+      <h4>5. Próximos eventos</h4>
+      <p>Las próximas 4 citas / perforaciones / entregas agendadas.</p>
+
+      <h4>6. Pipeline de ventas</h4>
+      <p>Cuántas oportunidades tienes en cada etapa: nueva, contactado, propuesta, negociación, ganada.</p>
+    </section>
+
+    <!-- PRODUCTOS -->
+    <section class="section" id="productos">
+      <h2><span class="num">— 03</span><em>Productos</em></h2>
+      <div class="sub">El catálogo de tus joyas. Lo que ven tus clientes.</div>
+
+      <p>Aquí cargas todas tus piezas: nombre, fotos, precio, material, stock. Cada producto que crees aquí aparecerá automáticamente en la web pública si está en estado <em>disponible</em>.</p>
+
+      <h3>Crear un producto nuevo</h3>
+      <div class="steps">
+        <strong>Pasos:</strong>
+        <ol>
+          <li>Ve a <strong>Productos</strong> en el menú lateral.</li>
+          <li>Clic en <strong>+ Nueva joya</strong> (botón dorado arriba a la derecha).</li>
+          <li>Llena los datos:
+            <ul>
+              <li><strong>Nombre</strong>: como lo verá el cliente. Ej. "Anillo Solitario Eternal".</li>
+              <li><strong>Referencia</strong>: tu código interno. Ej. "ANI-001".</li>
+              <li><strong>Categoría</strong>: anillos, collares, etc.</li>
+              <li><strong>Precio actual</strong>: el que cobras hoy.</li>
+              <li><strong>Precio anterior tachado</strong>: opcional, para mostrar descuentos. Si pones uno mayor al precio actual, en la web aparece tachado y muestra el % de descuento.</li>
+              <li><strong>Material</strong>: "Oro 18k", "Plata 925 con topacios".</li>
+              <li><strong>Tienda</strong>: en cuál se vende. <em>Ambas</em> si está en las dos.</li>
+              <li><strong>Descripción</strong>: detalles para el cliente.</li>
+              <li><strong>Estado</strong>: <em>disponible</em> (visible en web), <em>reservado</em>, <em>vendido</em>, <em>agotado</em>.</li>
+              <li><strong>Stock total / T1 / T2 / Alerta</strong>: cantidad. Si el total baja del valor de "Alerta", aparece marcado en rojo.</li>
+            </ul>
+          </li>
+          <li>Sube hasta <strong>5 fotos</strong> (máx 5 MB cada una). La primera es la principal — la que se ve en miniatura.</li>
+          <li>Si no subes fotos, elige un emoji como ícono.</li>
+          <li>Clic en <strong>Guardar</strong>.</li>
+        </ol>
+      </div>
+
+      <h3>Marcar como destacado</h3>
+      <p>En la lista, cada producto tiene un botón <strong>★</strong>. Si lo activas (se pone dorado), ese producto aparece en la sección "Destacados" de la web pública. <strong>Máximo 5 destacados</strong> al mismo tiempo.</p>
+
+      <h3>Editar / eliminar</h3>
+      <ul>
+        <li><strong>Editar</strong>: clic en "Editar" en la card del producto.</li>
+        <li><strong>Eliminar</strong>: clic en la <strong>✕</strong>. ⚠ borra también las fotos del Storage de Supabase. No se puede deshacer.</li>
+      </ul>
+
+      <h3>Filtros</h3>
+      <p>Arriba tienes:</p>
+      <ul>
+        <li><strong>Buscador</strong>: busca por nombre o referencia.</li>
+        <li><strong>Filtros por categoría</strong>: Todos, Anillos, Collares…</li>
+        <li><strong>Filtros por tienda</strong>: Todas, Tienda 1, Tienda 2.</li>
+      </ul>
+    </section>
+
+    <!-- CATEGORÍAS -->
+    <section class="section" id="categorias">
+      <h2><span class="num">— 04</span><em>Categorías</em></h2>
+      <div class="sub">Las divisiones de tu catálogo.</div>
+
+      <p>Por defecto vienen: Anillos, Collares, Pendientes, Pulseras, Sets. Puedes editar, agregar o eliminar.</p>
+
+      <div class="steps">
+        <strong>Para crear una categoría:</strong>
+        <ol>
+          <li><strong>Categorías</strong> → <strong>+ Nueva categoría</strong>.</li>
+          <li>Nombre (ej. "Broches") y elige un color (ese color es el que se muestra en la etiqueta).</li>
+          <li>Guardar.</li>
+        </ol>
+      </div>
+
+      <div class="warn">
+        <strong>Si quieres eliminar una categoría</strong> que tiene productos asignados, primero reasigna los productos a otra categoría (editando cada producto). El sistema te lo recuerda.
+      </div>
+    </section>
+
+    <!-- INVENTARIO -->
+    <section class="section" id="inventario">
+      <h2><span class="num">— 05</span><em>Inventario</em></h2>
+      <div class="sub">El stock por tienda. Lo que tienes físicamente.</div>
+
+      <p>El inventario tiene <strong>3 pestañas</strong>:</p>
+
+      <h3>1. Stock actual</h3>
+      <p>Tabla con todos los productos: nombre, categoría, tienda, stock total, stock T1, stock T2, estado (OK / stock bajo / agotado).</p>
+
+      <h3>2. Alertas</h3>
+      <p>Solo los productos con stock bajo (los que están por debajo del umbral que definiste). Útil para saber qué tienes que reponer.</p>
+
+      <h3>3. Entradas</h3>
+      <p>Historial de todas las compras a proveedores. Cuándo, qué proveedor, qué productos, en qué tienda, total.</p>
+
+      <h3>Registrar una entrada de inventario (compra a proveedor)</h3>
+      <div class="steps">
+        <strong>Pasos:</strong>
+        <ol>
+          <li>Clic en <strong>+ Registrar entrada</strong>.</li>
+          <li>Fecha, proveedor, destino (Tienda 1 / Tienda 2 / Ambas), notas.</li>
+          <li>Por cada producto: elige el producto del catálogo, cantidad, costo unitario.</li>
+          <li>Clic en <strong>+ Agregar producto</strong> para añadir más líneas.</li>
+          <li><strong>Registrar entrada</strong>.</li>
+        </ol>
+      </div>
+
+      <div class="tip">
+        <strong>Magia automática:</strong> al registrar la entrada, el stock de cada producto sube SOLO. No tienes que tocar la pestaña de productos. Lo mismo cuando un pedido pasa a <em>confirmado</em> — el stock baja solo.
+      </div>
+
+      <h3>Cómo funciona el stock por tienda</h3>
+      <ul>
+        <li>Si registras una entrada con destino <strong>Tienda 1</strong>, solo sube el <code>stock_t1</code>.</li>
+        <li>Si pones <strong>Ambas</strong>, sube T1 y T2 cada uno por la cantidad ingresada.</li>
+        <li>El <code>stock_total</code> siempre sube por la cantidad total.</li>
+      </ul>
+    </section>
+
+    <!-- EVENTOS -->
+    <section class="section" id="eventos">
+      <h2><span class="num">— 06</span><em>Eventos</em> y citas</h2>
+      <div class="sub">Tu agenda. Para perforaciones, pruebas, entregas en persona.</div>
+
+      <p>Aquí agendas todo lo que tiene fecha y hora: citas con clientas, perforaciones de orejas/septum, pruebas de anillos, entregas presenciales.</p>
+
+      <h3>Crear un evento</h3>
+      <div class="steps">
+        <strong>Pasos:</strong>
+        <ol>
+          <li><strong>Eventos</strong> → <strong>+ Nuevo evento</strong>.</li>
+          <li>Llena:
+            <ul>
+              <li><strong>Título</strong>: "Perforación oreja - Andrea Mejía".</li>
+              <li><strong>Tipo</strong>: cita, perforación, prueba, entrega, otro.</li>
+              <li><strong>Inicio / Fin</strong>: fecha y hora.</li>
+              <li><strong>Cliente</strong>: opcional, vincula a un cliente del CRM.</li>
+              <li><strong>Lugar</strong>: dirección o "Atelier".</li>
+              <li><strong>Notas</strong>: detalles especiales.</li>
+              <li><strong>Estado</strong>: agendado, confirmado, completado, cancelado.</li>
+            </ul>
+          </li>
+          <li><strong>Guardar evento</strong>.</li>
+        </ol>
+      </div>
+
+      <h3>Sincronizar con Google Calendar 📅</h3>
+      <p>Cada evento (en la lista o dentro del modal de edición) tiene un botón azul <strong>"📅 Agregar a Google Calendar"</strong>. Al hacer clic:</p>
+      <ol>
+        <li>Se abre Google Calendar en una pestaña nueva.</li>
+        <li>El evento ya viene <strong>prellenado</strong> con título, fecha, hora, lugar, notas.</li>
+        <li>Solo confirmas con un clic y se guarda en tu calendario personal.</li>
+      </ol>
+
+      <div class="info">
+        <strong>Por qué así:</strong> es la forma más simple. No requiere conectar nada, no pide permisos, no caduca. Cada vez que creas un evento en bybega, decides si lo metes a Google también.
+      </div>
+
+      <h3>Filtros</h3>
+      <ul>
+        <li><strong>Próximos</strong>: eventos a futuro que no estén cancelados (default).</li>
+        <li><strong>Pasados</strong>: histórico.</li>
+        <li><strong>Cancelados</strong>.</li>
+        <li><strong>Por tipo</strong>: solo perforaciones, solo citas, etc.</li>
+      </ul>
+    </section>
+
+    <!-- OPORTUNIDADES -->
+    <section class="section" id="oportunidades">
+      <h2><span class="num">— 07</span><em>Oportunidades</em></h2>
+      <div class="sub">Tu pipeline. Clientes interesados que aún no compraron.</div>
+
+      <p>Cada vez que alguien te escribe interesado en una pieza, anótalo aquí. Las oportunidades se ven en un <strong>tablero Kanban</strong> con 5 columnas:</p>
+
+      <div class="flow">
+        <div class="flow-step"><strong>Nueva</strong></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><strong>Contactado</strong></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><strong>Propuesta</strong></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><strong>Negociación</strong></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><strong>Ganada</strong></div>
+      </div>
+
+      <p>Mueves cada oportunidad por las etapas a medida que avanzan las conversaciones. Las que cierras pasan a <em>Ganada</em>; las que se enfrían a <em>Perdida</em>.</p>
+
+      <h3>Crear oportunidad</h3>
+      <div class="steps">
+        <ol>
+          <li>Clic en <strong>+ Nueva oportunidad</strong>.</li>
+          <li>Título (ej. "Set aniversario"), cliente, valor estimado, etapa, fecha, notas.</li>
+          <li>Guardar.</li>
+        </ol>
+      </div>
+
+      <div class="tip">
+        <strong>Automatizado:</strong> cuando alguien llena el formulario de la web pública, se crea automáticamente una oportunidad <em>Nueva</em>. No tienes que crearla a mano.
+      </div>
+    </section>
+
+    <!-- PEDIDOS -->
+    <section class="section" id="pedidos">
+      <h2><span class="num">— 08</span><em>Pedidos</em></h2>
+      <div class="sub">El corazón del sistema. Aquí se cobra.</div>
+
+      <p>Un pedido es la venta concreta. Cuando alguien decide comprar, creas (o se crea solo desde la web) un pedido.</p>
+
+      <h3>Estados de un pedido</h3>
+      <table>
+        <tr><th>Estado</th><th>Qué significa</th></tr>
+        <tr><td><strong>Borrador</strong></td><td>Lo estás armando, no afecta stock ni dinero.</td></tr>
+        <tr><td><strong>Pendiente</strong></td><td>Llegó de la web. Falta confirmar pago.</td></tr>
+        <tr><td><strong>Confirmado</strong></td><td>Pago confirmado. <strong>Aquí baja el stock.</strong></td></tr>
+        <tr><td><strong>Proceso</strong></td><td>Se está fabricando o preparando.</td></tr>
+        <tr><td><strong>Listo</strong></td><td>Listo para entregar.</td></tr>
+        <tr><td><strong>Entregado</strong></td><td>El cliente lo recibió.</td></tr>
+        <tr><td><strong>Cancelado</strong></td><td>No se hizo.</td></tr>
+      </table>
+
+      <div class="warn">
+        <strong>Importante:</strong> el stock SOLO baja cuando un pedido pasa a <em>Confirmado</em>. Esto te protege: si llega un pedido pero el cliente no pagó, no comprometes inventario.
+      </div>
+
+      <h3>Crear un pedido</h3>
+      <div class="steps">
+        <ol>
+          <li><strong>Pedidos</strong> → <strong>+ Nuevo pedido</strong>.</li>
+          <li>Cliente (de la lista del CRM), fecha.</li>
+          <li>Estado inicial (normalmente <em>borrador</em> mientras lo armas).</li>
+          <li>Agrega productos uno por uno: producto, cantidad. El subtotal se calcula solo.</li>
+          <li>IVA: 13% o exento.</li>
+          <li>Tienda de la que sale.</li>
+          <li>Método de pago principal (efectivo, transferencia, Wompi, etc.).</li>
+          <li>Notas opcionales.</li>
+          <li><strong>Guardar pedido</strong>.</li>
+        </ol>
+      </div>
+
+      <h3>Registrar abonos parciales 💰</h3>
+      <p>Si un pedido se paga en partes (ej. $50 hoy en efectivo, $100 mañana por transferencia), <strong>cada pago se registra como un abono independiente</strong>:</p>
+      <div class="steps">
+        <ol>
+          <li>Abre el pedido (clic en <strong>Ver</strong>).</li>
+          <li>Baja a la sección <strong>"Abonos · pagos parciales"</strong>.</li>
+          <li>En la fila <em>"Registrar nuevo abono"</em>: monto, método, fecha, referencia (núm. de transferencia, núm. de transacción Wompi…), notas.</li>
+          <li>Clic en <strong>+ Abonar</strong>.</li>
+          <li>El sistema actualiza el saldo automáticamente.</li>
+        </ol>
+      </div>
+
+      <p>Arriba de la sección verás siempre: <strong>Pagado: $X · Saldo: $Y</strong>. Cuando pagado = total, el badge cambia a verde "Pagado" en la lista.</p>
+
+      <h3>Convertir pedido en factura</h3>
+      <p>En la lista de pedidos, cada fila tiene un botón <strong>"→ Factura"</strong>. Al hacer clic, se genera una factura con número correlativo (BYB-2026-001, BYB-2026-002…) y se asocia al pedido. Después en <strong>Facturas</strong> puedes verla, imprimirla, marcarla como pagada.</p>
+
+      <h3>Filtros</h3>
+      <p>Arriba: filtra por estado (todos / pendiente / confirmado / proceso / listo / etc.).</p>
+
+      <div class="tip">
+        <strong>Origen del pedido:</strong> cada fila muestra si fue manual (tú lo creaste) o si vino de la web 🌐. Útil para saber cuántos pedidos te llegan online vs. por teléfono.
+      </div>
+    </section>
+
+    <!-- FACTURAS -->
+    <section class="section" id="facturas">
+      <h2><span class="num">— 09</span><em>Facturas</em></h2>
+      <div class="sub">Los documentos formales para tus clientes.</div>
+
+      <p>Las facturas se crean desde la pantalla de <strong>Pedidos</strong> (botón "→ Factura"). En la sección <strong>Facturas</strong> ves:</p>
+      <ul>
+        <li>Número correlativo (BYB-AÑO-NÚMERO).</li>
+        <li>Cliente, fecha, subtotal, IVA, total.</li>
+        <li>Estado: pagada o impaga.</li>
+      </ul>
+
+      <h3>Acciones por factura</h3>
+      <ul>
+        <li><strong>Ver / imprimir</strong>: abre una vista previa estilo factura. Desde ahí puedes imprimir o guardar como PDF (Ctrl+P → "Guardar como PDF").</li>
+        <li><strong>Marcar pagada</strong>: cambia el estado a "Pagada" y la cuenta aparece en "Ingresos cobrados".</li>
+      </ul>
+
+      <div class="info">
+        <strong>Detalle SV:</strong> el número de factura es para tu control interno. Si necesitas factura tributaria (CCF, fiscal), usa el formato impreso para tu contadora.
+      </div>
+    </section>
+
+    <!-- ENTREGAS -->
+    <section class="section" id="entregas">
+      <h2><span class="num">— 10</span><em>Entregas</em></h2>
+      <div class="sub">El registro de "lo entregué a tal persona, en tal lugar, tal día".</div>
+
+      <p>Útil cuando mandas la pieza por mensajería o cuando alguien la recoge en tu nombre. Te queda evidencia.</p>
+
+      <h3>Crear una entrega</h3>
+      <div class="steps">
+        <ol>
+          <li><strong>Entregas</strong> → <strong>+ Nueva entrega</strong>.</li>
+          <li>Vincula a una factura (eso jala automáticamente al cliente).</li>
+          <li>Fecha, dirección, items (descripción libre), recibido por (nombre).</li>
+          <li>Estado: pendiente, en camino, entregado, cancelado.</li>
+          <li>Guardar.</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- CLIENTES -->
+    <section class="section" id="clientes">
+      <h2><span class="num">— 11</span><em>Clientes</em> (CRM)</h2>
+      <div class="sub">Tu base de datos. La memoria del negocio.</div>
+
+      <p>Cada cliente tiene una <strong>ficha completa</strong> con su historia: oportunidades, pedidos, facturas, entregas. Es lo que diferencia a una boutique cualquiera de una que recuerda a su clienta.</p>
+
+      <h3>Crear un cliente</h3>
+      <div class="steps">
+        <ol>
+          <li><strong>Clientes</strong> → <strong>+ Nuevo cliente</strong>.</li>
+          <li>Llena los datos. Los obligatorios son <strong>nombre, apellido, email y teléfono</strong>.</li>
+          <li>Datos opcionales útiles: dirección de envío, talla de anillo, fecha de cumpleaños (para felicitar), Instagram, NIT, preferencias.</li>
+          <li>Segmento: <em>nuevo</em>, <em>regular</em>, <em>vip</em>, <em>inactivo</em> (lo cambias tú según le veas).</li>
+          <li>Guardar.</li>
+        </ol>
+      </div>
+
+      <h3>Ficha del cliente</h3>
+      <p>Clic en <strong>Ver ficha</strong> en la lista. Te lleva a una pantalla con todo lo del cliente:</p>
+      <ul>
+        <li><strong>Datos personales</strong> (lado izquierdo).</li>
+        <li><strong>4 tarjetas de resumen</strong>: total cobrado, por cobrar, # pedidos, # oportunidades.</li>
+        <li><strong>Pestañas</strong>: facturas, pedidos, oportunidades, entregas — todo lo que ha hecho con ustedes.</li>
+      </ul>
+
+      <div class="tip">
+        <strong>Truco:</strong> cuando una clienta llama y te pregunta "¿qué pendiente tengo?", abres su ficha y le dices al instante: "Tienes la factura BYB-2026-024 por $340 pendiente desde el 15 de marzo". Eso es lo que vende.
+      </div>
+    </section>
+
+    <!-- CONFIG -->
+    <section class="section" id="config">
+      <h2><span class="num">— 12</span><em>Configuración</em></h2>
+      <div class="sub">Los datos del negocio. Se llena UNA vez.</div>
+
+      <h3>Datos del negocio</h3>
+      <p>Nombre, NIT, dirección fiscal, teléfono / WhatsApp, email, Instagram, eslogan. Estos datos aparecen en facturas y en la web pública.</p>
+
+      <div class="warn">
+        <strong>El teléfono es CRÍTICO.</strong> Debe ir con código de país: <code>+503 7000-0000</code>. Sin el 503, los botones de WhatsApp no funcionarán.
+      </div>
+    </section>
+
+    <!-- PAGOS -->
+    <section class="section" id="pagos">
+      <h2><span class="num">— 13</span>Métodos de <em>pago</em></h2>
+      <div class="sub">Las formas en que tu cliente te puede pagar.</div>
+
+      <p>Activa solo los métodos que aceptas. Cada uno requiere configuración mínima. Los métodos activados aparecen al cliente en la web cuando hace un pedido.</p>
+
+      <h3>💵 Efectivo (contra entrega)</h3>
+      <p>El más simple. Lo activas y listo. El cliente paga al recibir o al recoger.</p>
+
+      <h3>🏦 Transferencia bancaria</h3>
+      <p>Activa el toggle y llena: <strong>banco</strong> (BAC, Cuscatlán, Agrícola…), <strong>titular</strong>, <strong>número de cuenta</strong>, <strong>tipo</strong> (corriente / ahorros). Cuando el cliente elige transferencia en la web, se le muestran tus datos automáticamente con el número de pedido como referencia.</p>
+
+      <h3>💳 Wompi (BAC)</h3>
+      <p>Para cobrar tarjetas de crédito/débito vía Wompi.</p>
+      <div class="steps">
+        <strong>Configuración:</strong>
+        <ol>
+          <li>Tener cuenta comercial en BAC con servicio Wompi activo.</li>
+          <li>Entrar al panel Wompi → "Links de cobro" → crear un link.</li>
+          <li>Pegar el link en bybega → Configuración → Wompi.</li>
+          <li>Activar el toggle.</li>
+        </ol>
+      </div>
+
+      <h3>📱 N1co</h3>
+      <p>Igual que Wompi pero con N1co. Cuenta comercial → link de cobro → pegar.</p>
+
+      <h3>🅿️ PayPal</h3>
+      <p>Cuenta PayPal Business → crea un link en <strong>paypal.me</strong> (ej. <code>paypal.me/bybegasv</code>) → pégalo.</p>
+
+      <h3>🌐 Otra pasarela (Stripe, etc.)</h3>
+      <p>Si usas Stripe Checkout, Square, o cualquier otra pasarela, pega el link genérico aquí.</p>
+
+      <div class="warn">
+        <strong>El cobro NO es automático.</strong> Cuando el cliente hace clic en el botón de pago, se va a Wompi/PayPal/N1co a pagar. <strong>Tú</strong> ves la notificación de pago en tu cuenta de la pasarela y registras el abono en bybega manualmente (Pedidos → abrir → +Abonar). Para cobro 100% automatizado se necesita una integración avanzada — pídela cuando tengas volumen alto.
+      </div>
+
+      <h3>Modo de la web pública</h3>
+      <p>Decide si quieres que la web sea:</p>
+      <ul>
+        <li><strong>Realizar pedido</strong> (default): el cliente arma su pedido y lo envía. Cae como pedido <em>pendiente</em> en bybega y tú confirmas.</li>
+        <li><strong>Solicitar cotización</strong>: el cliente solo expresa interés. Cae como oportunidad. Útil si todas tus piezas son a medida.</li>
+      </ul>
+    </section>
+
+    <!-- EMPLEADOS -->
+    <section class="section" id="empleados">
+      <h2><span class="num">— 14</span><em>Empleados</em></h2>
+      <div class="sub">Tu equipo. Hasta 5 personas.</div>
+
+      <p>Cada empleado tiene su propio usuario y contraseña. Eso permite ver quién hizo qué y mantener seguro el sistema.</p>
+
+      <h3>Crear un empleado</h3>
+      <div class="steps">
+        <ol>
+          <li><strong>Configuración</strong> → bajar hasta <strong>Empleados</strong>.</li>
+          <li>Sección "Agregar nuevo empleado": nombre completo, email, rol.</li>
+          <li><strong>+ Crear empleado</strong>.</li>
+          <li>El empleado recibe un email de invitación con un link para fijar su contraseña.</li>
+          <li>Una vez que la fija, puede entrar normalmente.</li>
+        </ol>
+      </div>
+
+      <h3>Roles</h3>
+      <table>
+        <tr><th>Rol</th><th>Para qué</th></tr>
+        <tr><td><strong>Administrador</strong></td><td>Acceso total. Solo el dueño / gerente.</td></tr>
+        <tr><td><strong>Vendedor</strong></td><td>El día a día: clientes, pedidos, productos.</td></tr>
+        <tr><td><strong>Logística</strong></td><td>Inventario y entregas.</td></tr>
+        <tr><td><strong>Solo lectura</strong></td><td>Puede ver pero no modificar.</td></tr>
+      </table>
+
+      <div class="info">
+        <strong>Por ahora todos los roles ven todo.</strong> Las restricciones por rol se afinarán en versiones futuras.
+      </div>
+    </section>
+
+    <!-- EMAIL -->
+    <section class="section" id="email">
+      <h2><span class="num">— 15</span>Notificaciones por <em>email</em></h2>
+      <div class="sub">Que te llegue un correo cada vez que alguien pide algo en la web.</div>
+
+      <p>Cada vez que un cliente envía un pedido o un mensaje desde <code>/web</code>, te llega un email con todos los datos. Para que esto funcione necesitas conectar Web3Forms (gratis hasta 250 envíos/mes).</p>
+
+      <div class="steps">
+        <strong>Pasos:</strong>
+        <ol>
+          <li>Ve a <strong>web3forms.com/access</strong> en otra pestaña.</li>
+          <li>Ingresa el email donde quieres recibir las notificaciones.</li>
+          <li>Te llega un email con tu <strong>Access Key</strong>. Copia esa clave.</li>
+          <li>En bybega: <strong>Configuración → Notificaciones por email</strong>.</li>
+          <li>Pega el email destino y la Access Key.</li>
+          <li><strong>Guardar</strong>.</li>
+          <li>Clic en <strong>Probar envío</strong>: debe llegarte un email de prueba en segundos.</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- WEB -->
+    <section class="section" id="web">
+      <h2><span class="num">— 16</span>La <em>web pública</em></h2>
+      <div class="sub">Lo que ven tus clientas en <code>/web</code>.</div>
+
+      <p>La web es generada automáticamente con los datos que cargas en el sistema. <strong>No hay que tocar código.</strong> Si subes una foto en Productos, aparece en la web. Si cambias el eslogan en Configuración, se actualiza.</p>
+
+      <h3>Qué ven los clientes</h3>
+      <ul>
+        <li><strong>Hero</strong>: tu nombre, eslogan, foto destacada.</li>
+        <li><strong>Destacados</strong>: las 5 piezas que marcaste con ★.</li>
+        <li><strong>Catálogo completo</strong>: todos los productos en estado <em>disponible</em>, filtrables por categoría.</li>
+        <li><strong>Proceso</strong>: tus 4 pasos (diseño, material, hechura, entrega).</li>
+        <li><strong>Atelier</strong>: sobre nosotras.</li>
+        <li><strong>Contacto</strong>: formulario + datos.</li>
+        <li><strong>Botón flotante de WhatsApp</strong>.</li>
+      </ul>
+
+      <h3>Cuando un cliente compra</h3>
+      <ol>
+        <li>Selecciona productos, ajusta cantidades.</li>
+        <li>Aparece una barra abajo con el total. Hace clic en <strong>Realizar pedido</strong>.</li>
+        <li>Llena nombre, apellido, email, WhatsApp, dirección.</li>
+        <li>Elige método de pago (de los que tú tienes activos).</li>
+        <li>Confirma.</li>
+        <li><strong>El sistema crea automáticamente:</strong>
+          <ul>
+            <li>Un cliente nuevo (si no existía).</li>
+            <li>Una oportunidad nueva.</li>
+            <li>Un pedido en estado <em>pendiente</em>.</li>
+          </ul>
+        </li>
+        <li>El cliente ve una pantalla con instrucciones según método (datos bancarios, link Wompi, etc.).</li>
+        <li>Te llega un email "🛒 NUEVO PEDIDO web #045".</li>
+        <li>Tú entras a Pedidos, abres el #045, confirmas que llegó el pago, registras el abono y cambias a <em>confirmado</em>.</li>
+      </ol>
+
+      <div class="tip">
+        <strong>El pedido NO baja stock</strong> mientras esté en <em>pendiente</em>. Solo baja cuando lo pasas a <em>confirmado</em>. Esto te protege contra pedidos falsos o que no se pagan.
+      </div>
+    </section>
+
+    <!-- FLUJO -->
+    <section class="section" id="flujo">
+      <h2><span class="num">— 17</span><em>Flujo</em> de trabajo diario</h2>
+      <div class="sub">El orden natural de las cosas. Léete esto y ya sabes el sistema.</div>
+
+      <h3>Cuando llega una clienta nueva</h3>
+      <div class="flow">
+        <div class="flow-step"><strong>1. Cliente</strong></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><strong>2. Oportunidad</strong></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><strong>3. Pedido</strong></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><strong>4. Factura</strong></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><strong>5. Entrega</strong></div>
+      </div>
+
+      <ol>
+        <li>Te escribe por Instagram interesada en algo. Crea el <strong>cliente</strong> con sus datos.</li>
+        <li>Crea una <strong>oportunidad</strong> en estado <em>nueva</em>: "Anillo aniversario - María".</li>
+        <li>Conversan. La mueves a <em>contactado</em>, luego <em>propuesta</em>, etc.</li>
+        <li>Acepta. Mueves la opp a <em>ganada</em> y creas un <strong>pedido</strong>.</li>
+        <li>Le mandas el link de Wompi por WhatsApp. Paga. Registras el abono.</li>
+        <li>Cambias el pedido a <em>confirmado</em> (baja stock).</li>
+        <li>Lo fabricas. <em>Proceso</em> → <em>listo</em>.</li>
+        <li>Generas <strong>factura</strong> desde el botón "→ Factura".</li>
+        <li>Mandas la pieza. Creas <strong>entrega</strong>. Cambias estado a <em>entregado</em>.</li>
+        <li>Marcas factura como <em>pagada</em>.</li>
+      </ol>
+
+      <h3>Cuando llega un pedido por la web</h3>
+      <ol>
+        <li>Te llega email "🛒 NUEVO PEDIDO web #045". Cliente, oportunidad y pedido ya están creados automáticamente.</li>
+        <li>Entras a <strong>Pedidos</strong>, ves el #045 con badge "🌐 web" en estado <em>pendiente</em>.</li>
+        <li>Le escribes por WhatsApp: "Recibimos tu pedido. Para Wompi: [link]. Total $85.50, ref #045."</li>
+        <li>Cliente paga. Tú lo ves en tu panel Wompi.</li>
+        <li>Abres el pedido en bybega → registras el abono → cambias a <em>confirmado</em>.</li>
+        <li>Continúas: factura, entrega.</li>
+      </ol>
+
+      <h3>Al final del día</h3>
+      <ol>
+        <li>Vas al <strong>Dashboard</strong>, eliges filtro <strong>Día</strong>.</li>
+        <li>Comparas: ¿el efectivo en caja coincide con "💵 Efectivo"?</li>
+        <li>¿Las transferencias en tu cuenta coinciden con "🏦 Transferencia"?</li>
+        <li>Si algo no cuadra, revisas los abonos del día.</li>
+      </ol>
+
+      <h3>Una vez por semana</h3>
+      <ol>
+        <li><strong>Inventario → Alertas</strong>: ¿qué hay que reponer?</li>
+        <li><strong>Eventos → Próximos</strong>: ¿qué citas tengo esta semana? ¿están todas en mi Google Calendar?</li>
+        <li><strong>Oportunidades</strong>: ¿hay leads sin contactar hace más de 3 días?</li>
+        <li><strong>Facturas → Impagas</strong>: ¿hay que llamar a cobrar?</li>
+      </ol>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section" id="faq">
+      <h2><span class="num">— 18</span>Preguntas <em>frecuentes</em></h2>
+      <div class="sub">Las dudas que aparecen en los primeros días.</div>
+
+      <details class="faq">
+        <summary>¿Por qué no me deja crear un cliente sin fecha de nacimiento?</summary>
+        <p>Sí te debe dejar — la fecha de nacimiento es <strong>opcional</strong>. Lo obligatorio es nombre, apellido, email y teléfono. Si te aparece error, asegúrate de tener la última versión del sistema (los archivos correctos subidos).</p>
+      </details>
+
+      <details class="faq">
+        <summary>¿Puedo cambiar el precio de un producto que ya vendí?</summary>
+        <p>Sí, pero los pedidos y facturas que ya tenías quedan congelados con el precio anterior. Cambiar el precio solo afecta nuevas ventas.</p>
+      </details>
+
+      <details class="faq">
+        <summary>¿Qué pasa si elimino un cliente que tiene pedidos?</summary>
+        <p>Los pedidos quedan, pero pierden la referencia al cliente. Te aparecerá "—" en lugar del nombre. Mejor pasa el cliente a segmento "Inactivo" en lugar de eliminarlo.</p>
+      </details>
+
+      <details class="faq">
+        <summary>¿Cómo le doy la factura física a mi clienta?</summary>
+        <p>En <strong>Facturas</strong> abres la factura → clic en imprimir → <strong>Ctrl+P</strong> → "Guardar como PDF". Le mandas el PDF por WhatsApp o lo imprimes.</p>
+      </details>
+
+      <details class="faq">
+        <summary>El stock baja solo cuando confirmo un pedido. ¿Puedo descontarlo manualmente?</summary>
+        <p>Sí, edita el producto y baja el campo "Stock total" / "Stock T1" / "Stock T2" a mano. Útil si vendes presencialmente sin pasar por un pedido (ej. tu mamá compró una pieza y se la regalaste).</p>
+      </details>
+
+      <details class="faq">
+        <summary>¿Puedo tener Wompi y N1co activos al mismo tiempo?</summary>
+        <p>Sí. En Configuración activa los dos. El cliente verá ambos botones y elegirá. También funciona PayPal + Wompi + N1co + Transferencia + Efectivo, todos a la vez.</p>
+      </details>
+
+      <details class="faq">
+        <summary>¿Cuándo se "elimina" un pedido pendiente que nadie pagó?</summary>
+        <p>No se elimina solo. Tú decides: si pasaron 3 días sin pago, lo cambias a estado <em>cancelado</em>. Queda en el histórico pero no aparece en pedidos activos.</p>
+      </details>
+
+      <details class="faq">
+        <summary>¿Las fotos que subo se ven igual en celular?</summary>
+        <p>Sí, la web es totalmente responsive. Las fotos se adaptan automáticamente. Eso sí, sube fotos de buena resolución (al menos 800x800 px) para que se vean bien.</p>
+      </details>
+
+      <details class="faq">
+        <summary>¿Puedo personalizar los colores / fuentes de la web?</summary>
+        <p>Hoy no desde el panel. La paleta es dorado + crema + negro. Si necesitas cambios visuales, es un ajuste en el código que se hace en una sola actualización.</p>
+      </details>
+
+      <details class="faq">
+        <summary>¿Y si me hackean? ¿Qué pasa con mi información?</summary>
+        <p>Los datos están en Supabase con cifrado y RLS (Row Level Security). Sin tu contraseña nadie entra. Recomendaciones: usa contraseña fuerte, no la compartas, y si despides un empleado cambia las contraseñas. Las copias de seguridad son automáticas en Supabase.</p>
+      </details>
+    </section>
+
+    <!-- PROBLEMAS -->
+    <section class="section" id="problemas">
+      <h2><span class="num">— 19</span>Si algo <em>falla</em></h2>
+      <div class="sub">Los 5 problemas más comunes y cómo arreglarlos sola.</div>
+
+      <h3>1. "No carga la página" / "Pantalla en blanco"</h3>
+      <ul>
+        <li>Recarga con <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> (Mac: <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>). Eso fuerza al navegador a descargar todo de nuevo.</li>
+        <li>Si sigue, prueba en otra pestaña / otro navegador. Si funciona ahí es problema de caché.</li>
+      </ul>
+
+      <h3>2. "Error al guardar"</h3>
+      <ul>
+        <li>Verifica que llenaste todos los campos obligatorios (los que tienen *).</li>
+        <li>Si dice algo de "permiso" o "RLS", es un tema de configuración en Supabase. Avisa al admin técnico.</li>
+      </ul>
+
+      <h3>3. "El botón de WhatsApp no abre nada"</h3>
+      <ul>
+        <li>Configuración → Datos del negocio → Teléfono debe tener formato <code>+503 7000-0000</code>. Sin el +503 (o sin el 503), wa.me no entiende el número.</li>
+      </ul>
+
+      <h3>4. "El cliente dice que pagó por Wompi pero no veo nada"</h3>
+      <ul>
+        <li>Entra a tu panel Wompi (no a bybega). Ahí verás si el pago se efectuó realmente.</li>
+        <li>Si Wompi confirma el pago, regresa a bybega → Pedidos → abre el pedido del cliente → registra el abono manualmente con el número de transacción.</li>
+      </ul>
+
+      <h3>5. "Subí una foto pero no se ve en la web"</h3>
+      <ul>
+        <li>El producto debe estar en estado <strong>disponible</strong>. Estados <em>vendido</em>, <em>reservado</em> y <em>agotado</em> NO aparecen en la web.</li>
+        <li>Hard refresh en la web (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>).</li>
+        <li>Si el archivo era mayor de 5MB, el sistema lo rechaza. Comprime la foto y vuelve a subirla.</li>
+      </ul>
+
+      <div class="info">
+        <strong>Si nada de esto resuelve tu problema:</strong> manda una captura de pantalla, la URL exacta donde estás, y describe qué intentaste hacer. Eso es 90% del trabajo del soporte técnico.
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="foot">
+  bybega · sistema de gestión integral · El Salvador<br />
+  Manual versión 3 · Mayo 2026 · Imprimible con Ctrl+P
+</footer>
+
+</body>
+</html>
