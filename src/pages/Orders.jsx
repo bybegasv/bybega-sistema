@@ -3,9 +3,11 @@ import { useData } from '../context/DataContext'
 
 const PAY_METHODS = [
   { value: 'cash',     label: 'Efectivo' },
-  { value: 'card',     label: 'Tarjeta' },
   { value: 'transfer', label: 'Transferencia' },
+  { value: 'wompi',    label: 'Wompi (BAC)' },
+  { value: 'n1co',     label: 'N1co' },
   { value: 'paypal',   label: 'PayPal' },
+  { value: 'card',     label: 'Otra pasarela' },
 ]
 const PAY_LBL = Object.fromEntries(PAY_METHODS.map(m => [m.value, m.label]))
 

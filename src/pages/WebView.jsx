@@ -3,8 +3,8 @@ import { supabase } from '../lib/supabase'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
-const PAY_LBL = { cash: 'Efectivo (contra entrega)', transfer: 'Transferencia bancaria', paypal: 'PayPal', card: 'Tarjeta' }
-const PAY_ICON = { cash: '💵', transfer: '🏦', paypal: '🅿️', card: '💳' }
+const PAY_LBL  = { cash: 'Efectivo (contra entrega)', transfer: 'Transferencia bancaria', paypal: 'PayPal', wompi: 'Wompi (BAC)', n1co: 'N1co', card: 'Otra pasarela' }
+const PAY_ICON = { cash: '💵', transfer: '🏦', paypal: '🅿️', wompi: '💳', n1co: '📱', card: '🌐' }
 
 export default function WebView() {
   const [settings, setSettings] = useState({})
@@ -58,6 +58,8 @@ export default function WebView() {
   const availableMethods = []
   if (settings.pay_cash_enabled === 'true')     availableMethods.push('cash')
   if (settings.pay_transfer_enabled === 'true') availableMethods.push('transfer')
+  if (settings.pay_wompi_enabled === 'true')    availableMethods.push('wompi')
+  if (settings.pay_n1co_enabled === 'true')     availableMethods.push('n1co')
   if (settings.pay_paypal_enabled === 'true')   availableMethods.push('paypal')
   if (settings.pay_card_enabled === 'true')     availableMethods.push('card')
 
@@ -315,9 +317,31 @@ export default function WebView() {
             </div>
           )}
 
+          {isOrderMode && m === 'wompi' && settings.wompi_link && (
+            <div style={{ background:'rgba(184,151,74,.08)', border:'1px solid var(--border)', borderRadius:10, padding:24, marginBottom:20, textAlign:'center' }}>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color:'var(--gold)', marginBottom:14 }}>💳 Pagar con Wompi</div>
+              <a href={settings.wompi_link} target="_blank" rel="noreferrer"
+                 style={{ display:'inline-block', padding:'12px 28px', background:'#005FAA', color:'#fff', borderRadius:8, fontSize:14, fontWeight:500, textDecoration:'none' }}>
+                Ir a Wompi · {usd(submitted.total)}
+              </a>
+              <div style={{ marginTop:12, fontSize:12, color:'var(--muted)' }}>Indica en el concepto: Pedido #{submitted.orderNum && String(submitted.orderNum).padStart(3,'0')}</div>
+            </div>
+          )}
+
+          {isOrderMode && m === 'n1co' && settings.n1co_link && (
+            <div style={{ background:'rgba(184,151,74,.08)', border:'1px solid var(--border)', borderRadius:10, padding:24, marginBottom:20, textAlign:'center' }}>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color:'var(--gold)', marginBottom:14 }}>📱 Pagar con N1co</div>
+              <a href={settings.n1co_link} target="_blank" rel="noreferrer"
+                 style={{ display:'inline-block', padding:'12px 28px', background:'#7c3aed', color:'#fff', borderRadius:8, fontSize:14, fontWeight:500, textDecoration:'none' }}>
+                Ir a N1co · {usd(submitted.total)}
+              </a>
+              <div style={{ marginTop:12, fontSize:12, color:'var(--muted)' }}>Indica en el concepto: Pedido #{submitted.orderNum && String(submitted.orderNum).padStart(3,'0')}</div>
+            </div>
+          )}
+
           {isOrderMode && m === 'card' && settings.card_link && (
             <div style={{ background:'rgba(184,151,74,.08)', border:'1px solid var(--border)', borderRadius:10, padding:24, marginBottom:20, textAlign:'center' }}>
-              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color:'var(--gold)', marginBottom:14 }}>💳 Pagar con tarjeta</div>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color:'var(--gold)', marginBottom:14 }}>🌐 Pagar online</div>
               <a href={settings.card_link} target="_blank" rel="noreferrer"
                  style={{ display:'inline-block', padding:'12px 28px', background:'var(--gold)', color:'var(--dark)', borderRadius:8, fontSize:14, fontWeight:500, textDecoration:'none' }}>
                 Ir al pago · {usd(submitted.total)}
@@ -627,8 +651,10 @@ export default function WebView() {
                         <div style={{ fontSize:14, color:'#fff', fontWeight:500 }}>{PAY_LBL[m]}</div>
                         {m === 'transfer' && settings.bank_name && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{settings.bank_name} · te pasaremos los datos al confirmar</div>}
                         {m === 'cash' && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>Pagarás al recibir tu pedido</div>}
+                        {m === 'wompi' && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>Pago seguro con tarjeta vía Wompi (BAC)</div>}
+                        {m === 'n1co' && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>Pago digital con N1co</div>}
                         {m === 'paypal' && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>Te enviaremos el link de pago</div>}
-                        {m === 'card' && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>Pago seguro online</div>}
+                        {m === 'card' && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>Pago online seguro</div>}
                       </div>
                     </label>
                   ))}

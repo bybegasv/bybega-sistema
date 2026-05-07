@@ -8,9 +8,11 @@ export default function Settings() {
   const [form, setForm] = useState({
     company:'', nit:'', address:'', phone:'', email:'', instagram:'', slogan:'',
     web3forms_key:'', notif_email:'',
-    pay_cash_enabled:'true', pay_transfer_enabled:'true', pay_paypal_enabled:'false', pay_card_enabled:'false',
+    pay_cash_enabled:'true', pay_transfer_enabled:'true',
+    pay_paypal_enabled:'false', pay_card_enabled:'false',
+    pay_wompi_enabled:'false', pay_n1co_enabled:'false',
     bank_name:'', bank_account:'', bank_holder:'', bank_type:'cuenta corriente',
-    paypal_link:'', card_link:'',
+    paypal_link:'', card_link:'', wompi_link:'', n1co_link:'',
     web_mode:'pedido'
   })
   const [empModal, setEmpModal] = useState(null)
@@ -35,12 +37,16 @@ export default function Settings() {
         pay_transfer_enabled: settings.pay_transfer_enabled ?? 'true',
         pay_paypal_enabled:   settings.pay_paypal_enabled   ?? 'false',
         pay_card_enabled:     settings.pay_card_enabled     ?? 'false',
+        pay_wompi_enabled:    settings.pay_wompi_enabled    ?? 'false',
+        pay_n1co_enabled:     settings.pay_n1co_enabled     ?? 'false',
         bank_name:    settings.bank_name    || '',
         bank_account: settings.bank_account || '',
         bank_holder:  settings.bank_holder  || '',
         bank_type:    settings.bank_type    || 'cuenta corriente',
         paypal_link:  settings.paypal_link  || '',
         card_link:    settings.card_link    || '',
+        wompi_link:   settings.wompi_link   || '',
+        n1co_link:    settings.n1co_link    || '',
         web_mode:     settings.web_mode     || 'pedido'
       }))
     }
@@ -195,6 +201,34 @@ export default function Settings() {
             )}
           </div>
 
+          {/* Wompi (BAC) */}
+          <div style={{ padding:16, border:'1px solid rgba(0,0,0,.08)', borderRadius:10, background: form.pay_wompi_enabled === 'true' ? 'rgba(46,125,82,.04)' : 'transparent' }}>
+            <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+              <input type="checkbox" checked={form.pay_wompi_enabled === 'true'} onChange={e => s('pay_wompi_enabled', e.target.checked ? 'true' : 'false')} />
+              <span style={{ fontWeight:500 }}>💳 Wompi (BAC)</span>
+            </label>
+            {form.pay_wompi_enabled === 'true' && (
+              <div style={{ marginTop:10, paddingLeft:24 }}>
+                <input value={form.wompi_link} onChange={e => s('wompi_link', e.target.value)} placeholder="https://checkout.wompi.sv/..." style={{ width:'100%', padding:'8px 12px', fontSize:13, border:'1px solid rgba(0,0,0,.14)', borderRadius:6 }} />
+                <div style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>Genera tu link de cobro desde el panel Wompi de BAC y pégalo aquí.</div>
+              </div>
+            )}
+          </div>
+
+          {/* N1co */}
+          <div style={{ padding:16, border:'1px solid rgba(0,0,0,.08)', borderRadius:10, background: form.pay_n1co_enabled === 'true' ? 'rgba(46,125,82,.04)' : 'transparent' }}>
+            <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+              <input type="checkbox" checked={form.pay_n1co_enabled === 'true'} onChange={e => s('pay_n1co_enabled', e.target.checked ? 'true' : 'false')} />
+              <span style={{ fontWeight:500 }}>📱 N1co</span>
+            </label>
+            {form.pay_n1co_enabled === 'true' && (
+              <div style={{ marginTop:10, paddingLeft:24 }}>
+                <input value={form.n1co_link} onChange={e => s('n1co_link', e.target.value)} placeholder="https://pay.n1co.com/..." style={{ width:'100%', padding:'8px 12px', fontSize:13, border:'1px solid rgba(0,0,0,.14)', borderRadius:6 }} />
+                <div style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>Pega el link de cobro generado en tu cuenta N1co Business.</div>
+              </div>
+            )}
+          </div>
+
           {/* PayPal */}
           <div style={{ padding:16, border:'1px solid rgba(0,0,0,.08)', borderRadius:10, background: form.pay_paypal_enabled === 'true' ? 'rgba(46,125,82,.04)' : 'transparent' }}>
             <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
@@ -209,16 +243,16 @@ export default function Settings() {
             )}
           </div>
 
-          {/* Card */}
+          {/* Card genérico (Stripe u otra) */}
           <div style={{ padding:16, border:'1px solid rgba(0,0,0,.08)', borderRadius:10, background: form.pay_card_enabled === 'true' ? 'rgba(46,125,82,.04)' : 'transparent' }}>
             <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
               <input type="checkbox" checked={form.pay_card_enabled === 'true'} onChange={e => s('pay_card_enabled', e.target.checked ? 'true' : 'false')} />
-              <span style={{ fontWeight:500 }}>💳 Tarjeta de crédito / débito</span>
+              <span style={{ fontWeight:500 }}>🌐 Otra pasarela (Stripe, etc.)</span>
             </label>
             {form.pay_card_enabled === 'true' && (
               <div style={{ marginTop:10, paddingLeft:24 }}>
-                <input value={form.card_link} onChange={e => s('card_link', e.target.value)} placeholder="Link de cobro Wompi / Stripe / N1co" style={{ width:'100%', padding:'8px 12px', fontSize:13, border:'1px solid rgba(0,0,0,.14)', borderRadius:6 }} />
-                <div style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>Pega el link de tu pasarela (Wompi, Stripe, N1co…). El cliente paga ahí y luego confirmas en el sistema.</div>
+                <input value={form.card_link} onChange={e => s('card_link', e.target.value)} placeholder="Link genérico de tu pasarela" style={{ width:'100%', padding:'8px 12px', fontSize:13, border:'1px solid rgba(0,0,0,.14)', borderRadius:6 }} />
+                <div style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>Para Stripe Checkout u otra pasarela que no esté arriba.</div>
               </div>
             )}
           </div>

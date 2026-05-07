@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useData } from '../context/DataContext'
 import { useNavigate } from 'react-router-dom'
 
-const PAY_LBL = { cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', paypal: 'PayPal' }
+const PAY_LBL = { cash: 'Efectivo', transfer: 'Transferencia', wompi: 'Wompi', n1co: 'N1co', paypal: 'PayPal', card: 'Otra' }
 
 function inRange(dateStr, periodStart) {
   if (!dateStr) return false
@@ -32,9 +32,12 @@ export default function Dashboard() {
   const sumByMethod = (m) => periodPays.filter(p => p.method === m).reduce((a, p) => a + Number(p.amount || 0), 0)
   const cashIn       = sumByMethod('cash')
   const transferIn   = sumByMethod('transfer')
+  const wompiIn      = sumByMethod('wompi')
+  const n1coIn       = sumByMethod('n1co')
   const cardIn       = sumByMethod('card')
   const paypalIn     = sumByMethod('paypal')
   const periodTotal  = periodPays.reduce((a, p) => a + Number(p.amount || 0), 0)
+  const cnt = (m) => periodPays.filter(p => p.method === m).length
 
   const orderStore = (id) => orders.find(o => o.id === id)?.store
   const paid = invoices.filter(i => i.paid).reduce((a, i) => a + Number(i.total), 0)
@@ -74,31 +77,25 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:12 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:12 }}>
           <div style={{ background:'rgba(184,151,74,.1)', padding:'16px 18px', borderRadius:8, borderLeft:'3px solid var(--gold)' }}>
             <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1 }}>Total cobrado</div>
             <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:26, color:'var(--gold)', marginTop:4 }}>{usd(periodTotal)}</div>
           </div>
-          <div style={{ background:'#f9f7f4', padding:'16px 18px', borderRadius:8 }}>
-            <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1 }}>💵 Efectivo</div>
-            <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:22, marginTop:4 }}>{usd(cashIn)}</div>
-            <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{periodPays.filter(p=>p.method==='cash').length} pagos</div>
-          </div>
-          <div style={{ background:'#f9f7f4', padding:'16px 18px', borderRadius:8 }}>
-            <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1 }}>🏦 Transferencia</div>
-            <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:22, marginTop:4 }}>{usd(transferIn)}</div>
-            <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{periodPays.filter(p=>p.method==='transfer').length} pagos</div>
-          </div>
-          <div style={{ background:'#f9f7f4', padding:'16px 18px', borderRadius:8 }}>
-            <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1 }}>💳 Tarjeta</div>
-            <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:22, marginTop:4 }}>{usd(cardIn)}</div>
-            <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{periodPays.filter(p=>p.method==='card').length} pagos</div>
-          </div>
-          <div style={{ background:'#f9f7f4', padding:'16px 18px', borderRadius:8 }}>
-            <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1 }}>🅿️ PayPal</div>
-            <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:22, marginTop:4 }}>{usd(paypalIn)}</div>
-            <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{periodPays.filter(p=>p.method==='paypal').length} pagos</div>
-          </div>
+          {[
+            ['💵 Efectivo',       cashIn,     'cash'],
+            ['🏦 Transferencia',  transferIn, 'transfer'],
+            ['💳 Wompi',          wompiIn,    'wompi'],
+            ['📱 N1co',           n1coIn,     'n1co'],
+            ['🅿️ PayPal',         paypalIn,   'paypal'],
+            ['🌐 Otra',           cardIn,     'card'],
+          ].map(([lbl, amt, key]) => (
+            <div key={key} style={{ background:'#f9f7f4', padding:'16px 18px', borderRadius:8 }}>
+              <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1 }}>{lbl}</div>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:22, marginTop:4 }}>{usd(amt)}</div>
+              <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{cnt(key)} pago{cnt(key)!==1?'s':''}</div>
+            </div>
+          ))}
         </div>
       </div>
 
