@@ -17,6 +17,8 @@ export function DataProvider({ children }) {
   const [orders, setOrders] = useState([])
   const [invoices, setInvoices] = useState([])
   const [deliveries, setDeliveries] = useState([])
+  const [payments, setPayments] = useState([])
+  const [events, setEvents] = useState([])
   const [settings, setSettings] = useState({})
 
   const showToast = useCallback((msg) => {
@@ -62,9 +64,19 @@ export function DataProvider({ children }) {
       loadOrders()
       loadInvoices()
       loadDeliveries()
+      loadPayments()
+      loadEvents()
       loadSettings()
     }
   }, [user])
+
+  // ── HELPERS DE NORMALIZACIÓN ─────────────────
+  // Convierte strings vacíos en null para columnas DATE/TIMESTAMP/UUID
+  const blankToNull = (obj, fields) => {
+    const out = { ...obj }
+    fields.forEach(k => { if (out[k] === '' || out[k] === undefined) out[k] = null })
+    return out
+  }
 
   // ── CATEGORIES ────────────────────────────────
   const loadCategories = async () => {
@@ -113,8 +125,12 @@ export function DataProvider({ children }) {
     if (data) setClients(data)
   }
   const saveClient = async (data, id) => {
-    if (id) await supabase.from('clients').update(data).eq('id', id)
-    else await supabase.from('clients').insert(data)
+    // dob '' rompe columnas DATE → null
+    const payload = blankToNull(data, ['dob'])
+    let error
+    if (id) ({ error } = await supabase.from('clients').update(payload).eq('id', id))
+    else    ({ error } = await supabase.from('clients').insert(payload))
+    if (error) { showToast('Error al guardar: ' + error.message); return error }
     await loadClients()
     showToast('Cliente guardado ✓')
   }
@@ -190,6 +206,48 @@ export function DataProvider({ children }) {
     showToast('Entrega guardada ✓')
   }
 
+  // ── PAYMENTS (abonos) ─────────────────────────
+  const loadPayments = async () => {
+    const { data } = await supabase.from('payments').select('*').order('date', { ascending: false })
+    if (data) setPayments(data)
+  }
+  const savePayment = async (data, id) => {
+    const payload = blankToNull(data, ['date'])
+    let error
+    if (id) ({ error } = await supabase.from('payments').update(payload).eq('id', id))
+    else    ({ error } = await supabase.from('payments').insert(payload))
+    if (error) { showToast('Error al guardar pago: ' + error.message); return error }
+    await Promise.all([loadPayments(), loadOrders()])
+    showToast('Pago registrado ✓')
+  }
+  const deletePayment = async (id) => {
+    await supabase.from('payments').delete().eq('id', id)
+    await Promise.all([loadPayments(), loadOrders()])
+    showToast('Pago eliminado')
+  }
+  const orderPayments = (orderId) => payments.filter(p => p.order_id === orderId)
+  const orderPaid = (orderId) => orderPayments(orderId).reduce((a, p) => a + Number(p.amount || 0), 0)
+
+  // ── EVENTS (citas / perforaciones) ────────────
+  const loadEvents = async () => {
+    const { data } = await supabase.from('events').select('*').order('start_at', { ascending: true })
+    if (data) setEvents(data)
+  }
+  const saveEvent = async (data, id) => {
+    const payload = blankToNull(data, ['client_id', 'end_at'])
+    let error
+    if (id) ({ error } = await supabase.from('events').update(payload).eq('id', id))
+    else    ({ error } = await supabase.from('events').insert(payload))
+    if (error) { showToast('Error al guardar evento: ' + error.message); return error }
+    await loadEvents()
+    showToast('Evento guardado ✓')
+  }
+  const deleteEvent = async (id) => {
+    await supabase.from('events').delete().eq('id', id)
+    await loadEvents()
+    showToast('Evento eliminado')
+  }
+
   // ── SETTINGS ──────────────────────────────────
   const loadSettings = async () => {
     const { data } = await supabase.from('settings').select('*')
@@ -255,6 +313,8 @@ export function DataProvider({ children }) {
       orders, saveOrder,
       invoices, createInvoice, markInvoicePaid,
       deliveries, saveDelivery,
+      payments, savePayment, deletePayment, orderPayments, orderPaid,
+      events, saveEvent, deleteEvent,
       settings, saveSetting, saveSettingsBatch,
       employees, loadEmployees,
       usd, fdate, catName, clientName, statusBadge, segBadge
