@@ -66,6 +66,8 @@ export function Categories() {
 }
 
 // ── CLIENT MODAL ──────────────────────────────────────────────
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+
 function ClientModal({ client, onSave, onClose }) {
   const [f, setF] = useState({
     name: client?.name || '', surname: client?.surname || '', email: client?.email || '',
@@ -74,33 +76,43 @@ function ClientModal({ client, onSave, onClose }) {
     prefs: client?.prefs || '', instagram: client?.instagram || '', shipping_addr: client?.shipping_addr || '',
     segment: client?.segment || 'nuevo', notes: client?.notes || ''
   })
-  const s = (k, v) => setF(p => ({ ...p, [k]: v }))
+  const [err, setErr] = useState('')
+  const s = (k, v) => { setF(p => ({ ...p, [k]: v })); if (err) setErr('') }
+
+  const submit = () => {
+    if (!f.name?.trim())         return setErr('El nombre es obligatorio')
+    if (!f.surname?.trim())      return setErr('El apellido es obligatorio')
+    if (!f.phone?.trim())        return setErr('El teléfono es obligatorio')
+    if (!EMAIL_RE.test(f.email)) return setErr('Email no válido')
+    onSave(f); onClose()
+  }
+
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal-box lg">
         <div className="modal-title">{client ? 'Editar' : 'Nuevo'} cliente</div>
         <div className="fr">
-          <div className="fg"><label>Nombre *</label><input value={f.name} onChange={e => s('name', e.target.value)} /></div>
-          <div className="fg"><label>Apellido</label><input value={f.surname} onChange={e => s('surname', e.target.value)} /></div>
+          <div className="fg"><label>Nombre *</label><input maxLength={80} value={f.name} onChange={e => s('name', e.target.value)} /></div>
+          <div className="fg"><label>Apellido *</label><input maxLength={80} value={f.surname} onChange={e => s('surname', e.target.value)} /></div>
         </div>
         <div className="fr">
-          <div className="fg"><label>Email *</label><input type="email" value={f.email} onChange={e => s('email', e.target.value)} /></div>
-          <div className="fg"><label>Teléfono</label><input value={f.phone} onChange={e => s('phone', e.target.value)} placeholder="+503 7000-0000" /></div>
+          <div className="fg"><label>Email *</label><input type="email" maxLength={120} value={f.email} onChange={e => s('email', e.target.value)} /></div>
+          <div className="fg"><label>Teléfono *</label><input maxLength={30} value={f.phone} onChange={e => s('phone', e.target.value)} placeholder="+503 7000-0000" /></div>
         </div>
         <div className="fr">
-          <div className="fg"><label>Ciudad</label><input value={f.city} onChange={e => s('city', e.target.value)} /></div>
-          <div className="fg"><label>País</label><input value={f.country} onChange={e => s('country', e.target.value)} /></div>
+          <div className="fg"><label>Ciudad</label><input maxLength={60} value={f.city} onChange={e => s('city', e.target.value)} /></div>
+          <div className="fg"><label>País</label><input maxLength={60} value={f.country} onChange={e => s('country', e.target.value)} /></div>
         </div>
         <div className="fr">
-          <div className="fg"><label>NIT</label><input value={f.nit} onChange={e => s('nit', e.target.value)} placeholder="0000-000000-000-0" /></div>
+          <div className="fg"><label>NIT</label><input maxLength={30} value={f.nit} onChange={e => s('nit', e.target.value)} placeholder="0000-000000-000-0" /></div>
           <div className="fg"><label>Fecha de nacimiento</label><input type="date" value={f.dob} onChange={e => s('dob', e.target.value)} /></div>
         </div>
         <div className="fr">
-          <div className="fg"><label>Talla de anillo</label><input value={f.ring_size} onChange={e => s('ring_size', e.target.value)} placeholder="6, 7…" /></div>
-          <div className="fg"><label>Instagram</label><input value={f.instagram} onChange={e => s('instagram', e.target.value)} placeholder="@usuario" /></div>
+          <div className="fg"><label>Talla de anillo</label><input maxLength={10} value={f.ring_size} onChange={e => s('ring_size', e.target.value)} placeholder="6, 7…" /></div>
+          <div className="fg"><label>Instagram</label><input maxLength={60} value={f.instagram} onChange={e => s('instagram', e.target.value)} placeholder="@usuario" /></div>
         </div>
-        <div className="fg"><label>Dirección de envío</label><input value={f.shipping_addr} onChange={e => s('shipping_addr', e.target.value)} /></div>
-        <div className="fg"><label>Preferencias</label><input value={f.prefs} onChange={e => s('prefs', e.target.value)} placeholder="Prefiere oro rosa, piezas delicadas…" /></div>
+        <div className="fg"><label>Dirección de envío</label><input maxLength={200} value={f.shipping_addr} onChange={e => s('shipping_addr', e.target.value)} /></div>
+        <div className="fg"><label>Preferencias</label><input maxLength={200} value={f.prefs} onChange={e => s('prefs', e.target.value)} placeholder="Prefiere oro rosa, piezas delicadas…" /></div>
         <div className="fr">
           <div className="fg"><label>Segmento</label>
             <select value={f.segment} onChange={e => s('segment', e.target.value)}>
@@ -108,10 +120,11 @@ function ClientModal({ client, onSave, onClose }) {
             </select>
           </div>
         </div>
-        <div className="fg"><label>Notas</label><textarea rows={2} value={f.notes} onChange={e => s('notes', e.target.value)} /></div>
+        <div className="fg"><label>Notas</label><textarea maxLength={1000} rows={2} value={f.notes} onChange={e => s('notes', e.target.value)} /></div>
+        {err && <div style={{ color:'var(--danger)', fontSize:12, marginBottom:10 }}>{err}</div>}
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-gold" onClick={() => { if (!f.name || !f.email) return alert('Nombre y email requeridos'); onSave(f); onClose() }}>Guardar</button>
+          <button className="btn btn-gold" onClick={submit}>Guardar</button>
         </div>
       </div>
     </div>

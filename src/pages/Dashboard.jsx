@@ -1,9 +1,40 @@
+import { useState } from 'react'
 import { useData } from '../context/DataContext'
 import { useNavigate } from 'react-router-dom'
 
+const PAY_LBL = { cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', paypal: 'PayPal' }
+
+function inRange(dateStr, periodStart) {
+  if (!dateStr) return false
+  const d = new Date(dateStr + (dateStr.length === 10 ? 'T12:00:00' : ''))
+  return d >= periodStart
+}
+function startOf(period) {
+  const now = new Date()
+  if (period === 'day')   return new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  if (period === 'week') {
+    const d = new Date(now)
+    const dow = (d.getDay() + 6) % 7  // lunes = 0
+    d.setDate(d.getDate() - dow); d.setHours(0,0,0,0)
+    return d
+  }
+  if (period === 'month') return new Date(now.getFullYear(), now.getMonth(), 1)
+  return new Date(0)
+}
+
 export default function Dashboard() {
-  const { products, clients, opportunities, orders, invoices, usd, fdate, profile } = useData()
+  const { products, clients, opportunities, orders, invoices, payments, events, usd, fdate, profile } = useData()
   const nav = useNavigate()
+  const [period, setPeriod] = useState('month')
+
+  const periodStart = startOf(period)
+  const periodPays = payments.filter(p => inRange(p.date, periodStart))
+  const sumByMethod = (m) => periodPays.filter(p => p.method === m).reduce((a, p) => a + Number(p.amount || 0), 0)
+  const cashIn       = sumByMethod('cash')
+  const transferIn   = sumByMethod('transfer')
+  const cardIn       = sumByMethod('card')
+  const paypalIn     = sumByMethod('paypal')
+  const periodTotal  = periodPays.reduce((a, p) => a + Number(p.amount || 0), 0)
 
   const orderStore = (id) => orders.find(o => o.id === id)?.store
   const paid = invoices.filter(i => i.paid).reduce((a, i) => a + Number(i.total), 0)
@@ -15,6 +46,12 @@ export default function Dashboard() {
   const openOpps = opportunities.filter(o => !['ganada', 'perdida'].includes(o.stage)).length
   const STAGES = ['nueva', 'contactado', 'propuesta', 'negociacion', 'ganada']
 
+  const upcoming = events
+    .filter(e => new Date(e.start_at) >= new Date() && e.status !== 'cancelado')
+    .slice(0, 4)
+
+  const periodLbl = { day: 'Hoy', week: 'Esta semana', month: 'Este mes' }[period]
+
   return (
     <div className="page">
       <div className="ph">
@@ -24,8 +61,49 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* RESUMEN DE VENTAS POR PERIODO */}
+      <div className="card" style={{ marginBottom:20 }}>
+        <div className="card-header">
+          <div>
+            <div className="card-title">Resumen de ventas · {periodLbl}</div>
+            <div style={{ fontSize:12, color:'var(--muted)', marginTop:2 }}>{periodPays.length} pago{periodPays.length!==1?'s':''} registrado{periodPays.length!==1?'s':''}</div>
+          </div>
+          <div style={{ display:'flex', gap:6 }}>
+            {[['day','Día'],['week','Semana'],['month','Mes']].map(([k,l]) => (
+              <button key={k} className={`fi ${period===k?'active':''}`} onClick={() => setPeriod(k)}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:12 }}>
+          <div style={{ background:'rgba(184,151,74,.1)', padding:'16px 18px', borderRadius:8, borderLeft:'3px solid var(--gold)' }}>
+            <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1 }}>Total cobrado</div>
+            <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:26, color:'var(--gold)', marginTop:4 }}>{usd(periodTotal)}</div>
+          </div>
+          <div style={{ background:'#f9f7f4', padding:'16px 18px', borderRadius:8 }}>
+            <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1 }}>💵 Efectivo</div>
+            <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:22, marginTop:4 }}>{usd(cashIn)}</div>
+            <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{periodPays.filter(p=>p.method==='cash').length} pagos</div>
+          </div>
+          <div style={{ background:'#f9f7f4', padding:'16px 18px', borderRadius:8 }}>
+            <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1 }}>🏦 Transferencia</div>
+            <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:22, marginTop:4 }}>{usd(transferIn)}</div>
+            <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{periodPays.filter(p=>p.method==='transfer').length} pagos</div>
+          </div>
+          <div style={{ background:'#f9f7f4', padding:'16px 18px', borderRadius:8 }}>
+            <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1 }}>💳 Tarjeta</div>
+            <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:22, marginTop:4 }}>{usd(cardIn)}</div>
+            <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{periodPays.filter(p=>p.method==='card').length} pagos</div>
+          </div>
+          <div style={{ background:'#f9f7f4', padding:'16px 18px', borderRadius:8 }}>
+            <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1 }}>🅿️ PayPal</div>
+            <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:22, marginTop:4 }}>{usd(paypalIn)}</div>
+            <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{periodPays.filter(p=>p.method==='paypal').length} pagos</div>
+          </div>
+        </div>
+      </div>
+
       <div className="stats">
-        <div className="sc"><div className="sc-label">Ingresos cobrados</div><div className="sc-value">{usd(paid)}</div><div className="sc-badge bg-g">facturas pagadas</div></div>
+        <div className="sc"><div className="sc-label">Ingresos cobrados (total)</div><div className="sc-value">{usd(paid)}</div><div className="sc-badge bg-g">facturas pagadas</div></div>
         <div className="sc"><div className="sc-label">Por cobrar</div><div className="sc-value">{usd(pending)}</div><div className="sc-badge bg-r">impagas</div></div>
         <div className="sc"><div className="sc-label">Pedidos activos</div><div className="sc-value">{activeOrders}</div><div className="sc-badge bg">en proceso</div></div>
         <div className="sc"><div className="sc-label">Oportunidades</div><div className="sc-value">{openOpps}</div><div className="sc-badge bg-b">abiertas</div></div>
@@ -59,20 +137,29 @@ export default function Dashboard() {
             <span style={{ fontFamily:'Cormorant Garamond,serif', fontSize:18, color:'var(--gold)' }}>{usd(paid)}</span>
           </div>
         </div>
+
         <div className="card">
-          <div className="card-title" style={{ marginBottom:14 }}>Resumen rápido</div>
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            {[['Productos disponibles', products.filter(p=>p.status==='disponible').length, 'tg-g'],
-              ['Clientes en CRM', clients.length, 'tg-b'],
-              ['Pedidos activos', activeOrders, 'tg'],
-              ['Facturas impagas', invoices.filter(i=>!i.paid).length, 'tg-r']
-            ].map(([label, val, cls]) => (
-              <div key={label} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 0', borderBottom:'1px solid rgba(0,0,0,.04)' }}>
-                <span style={{ fontSize:13, color:'var(--mid)' }}>{label}</span>
-                <span className={`tag ${cls}`} style={{ fontSize:13, minWidth:28, textAlign:'center' }}>{val}</span>
-              </div>
-            ))}
+          <div className="card-header">
+            <div className="card-title">Próximos eventos</div>
+            <button className="btn btn-ghost btn-sm" onClick={() => nav('/admin/eventos')}>Ver todos</button>
           </div>
+          {upcoming.length === 0 ? (
+            <div style={{ fontSize:13, color:'var(--muted)', padding:'12px 0' }}>No hay eventos próximos</div>
+          ) : upcoming.map(e => {
+            const dt = new Date(e.start_at)
+            return (
+              <div key={e.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 0', borderBottom:'1px solid rgba(0,0,0,.05)' }}>
+                <div style={{ minWidth:48, textAlign:'center' }}>
+                  <div style={{ fontSize:10, color:'var(--muted)', textTransform:'uppercase' }}>{dt.toLocaleDateString('es-SV',{ month:'short' })}</div>
+                  <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:22, color:'var(--gold)' }}>{dt.getDate()}</div>
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:500 }}>{e.title}</div>
+                  <div style={{ fontSize:11, color:'var(--muted)' }}>{dt.toLocaleTimeString('es-SV',{ hour:'2-digit', minute:'2-digit' })} · {e.type}</div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -118,24 +205,6 @@ export default function Dashboard() {
               </div>
             )
           })}
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginTop: 20 }}>
-        <div className="card" style={{ cursor: 'pointer' }} onClick={() => nav('/admin/productos')}>
-          <div style={{ fontSize: 28, marginBottom: 6 }}>◇</div>
-          <div style={{ fontSize: 22, fontFamily: 'Cormorant Garamond, serif' }}>{products.length}</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Productos</div>
-        </div>
-        <div className="card" style={{ cursor: 'pointer' }} onClick={() => nav('/admin/clientes')}>
-          <div style={{ fontSize: 28, marginBottom: 6 }}>◎</div>
-          <div style={{ fontSize: 22, fontFamily: 'Cormorant Garamond, serif' }}>{clients.length}</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Clientes en CRM</div>
-        </div>
-        <div className="card" style={{ cursor: 'pointer' }} onClick={() => nav('/admin/pedidos')}>
-          <div style={{ fontSize: 28, marginBottom: 6 }}>▤</div>
-          <div style={{ fontSize: 22, fontFamily: 'Cormorant Garamond, serif' }}>{orders.length}</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Pedidos totales</div>
         </div>
       </div>
     </div>

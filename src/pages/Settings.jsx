@@ -5,15 +5,23 @@ import { supabase } from '../lib/supabase'
 export default function Settings() {
   const { settings, saveSettingsBatch, showToast, employees, loadEmployees } = useData()
 
-  const [form, setForm] = useState({ company:'', nit:'', address:'', phone:'', email:'', instagram:'', slogan:'', web3forms_key:'', notif_email:'' })
+  const [form, setForm] = useState({
+    company:'', nit:'', address:'', phone:'', email:'', instagram:'', slogan:'',
+    web3forms_key:'', notif_email:'',
+    pay_cash_enabled:'true', pay_transfer_enabled:'true', pay_paypal_enabled:'false', pay_card_enabled:'false',
+    bank_name:'', bank_account:'', bank_holder:'', bank_type:'cuenta corriente',
+    paypal_link:'', card_link:'',
+    web_mode:'pedido'
+  })
   const [empModal, setEmpModal] = useState(null)
   const [testResult, setTestResult] = useState('')
   const [inviting, setInviting] = useState(false)
   const [newEmp, setNewEmp] = useState({ email:'', name:'', role:'vendedor' })
 
   useEffect(() => {
-    if (settings.company) {
-      setForm({
+    if (settings.company !== undefined) {
+      setForm(prev => ({
+        ...prev,
         company: settings.company || '',
         nit: settings.nit || '',
         address: settings.address || '',
@@ -22,8 +30,19 @@ export default function Settings() {
         instagram: settings.instagram || '',
         slogan: settings.slogan || '',
         web3forms_key: settings.web3forms_key || '',
-        notif_email: settings.notif_email || ''
-      })
+        notif_email: settings.notif_email || '',
+        pay_cash_enabled:     settings.pay_cash_enabled     ?? 'true',
+        pay_transfer_enabled: settings.pay_transfer_enabled ?? 'true',
+        pay_paypal_enabled:   settings.pay_paypal_enabled   ?? 'false',
+        pay_card_enabled:     settings.pay_card_enabled     ?? 'false',
+        bank_name:    settings.bank_name    || '',
+        bank_account: settings.bank_account || '',
+        bank_holder:  settings.bank_holder  || '',
+        bank_type:    settings.bank_type    || 'cuenta corriente',
+        paypal_link:  settings.paypal_link  || '',
+        card_link:    settings.card_link    || '',
+        web_mode:     settings.web_mode     || 'pedido'
+      }))
     }
   }, [settings])
 
@@ -136,6 +155,93 @@ export default function Settings() {
             : <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>⚠ Configura tu clave para activar los emails</div>
           }
         </div>
+      </div>
+
+      {/* MÉTODOS DE PAGO */}
+      <div className="card" style={{ marginBottom:20 }}>
+        <div className="card-title" style={{ marginBottom: 4 }}>💳 Métodos de pago aceptados</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 18, lineHeight: 1.7 }}>
+          Activa los métodos que aceptas. Los clientes verán solo los activados al hacer un pedido en la web.
+        </div>
+
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:18 }}>
+          {/* Cash */}
+          <div style={{ padding:16, border:'1px solid rgba(0,0,0,.08)', borderRadius:10, background: form.pay_cash_enabled === 'true' ? 'rgba(46,125,82,.04)' : 'transparent' }}>
+            <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+              <input type="checkbox" checked={form.pay_cash_enabled === 'true'} onChange={e => s('pay_cash_enabled', e.target.checked ? 'true' : 'false')} />
+              <span style={{ fontWeight:500 }}>💵 Efectivo (contra entrega)</span>
+            </label>
+            <div style={{ fontSize:11, color:'var(--muted)', marginTop:6, paddingLeft:24 }}>El cliente paga en efectivo al recibir o al recoger en tienda.</div>
+          </div>
+
+          {/* Transfer */}
+          <div style={{ padding:16, border:'1px solid rgba(0,0,0,.08)', borderRadius:10, background: form.pay_transfer_enabled === 'true' ? 'rgba(46,125,82,.04)' : 'transparent' }}>
+            <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+              <input type="checkbox" checked={form.pay_transfer_enabled === 'true'} onChange={e => s('pay_transfer_enabled', e.target.checked ? 'true' : 'false')} />
+              <span style={{ fontWeight:500 }}>🏦 Transferencia bancaria</span>
+            </label>
+            {form.pay_transfer_enabled === 'true' && (
+              <div style={{ marginTop:10, paddingLeft:24, display:'grid', gap:8 }}>
+                <input value={form.bank_name} onChange={e => s('bank_name', e.target.value)} placeholder="Banco (BAC, Cuscatlán, Agrícola…)" style={{ padding:'8px 12px', fontSize:13, border:'1px solid rgba(0,0,0,.14)', borderRadius:6 }} />
+                <input value={form.bank_holder} onChange={e => s('bank_holder', e.target.value)} placeholder="Nombre del titular" style={{ padding:'8px 12px', fontSize:13, border:'1px solid rgba(0,0,0,.14)', borderRadius:6 }} />
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 140px', gap:6 }}>
+                  <input value={form.bank_account} onChange={e => s('bank_account', e.target.value)} placeholder="Número de cuenta" style={{ padding:'8px 12px', fontSize:13, border:'1px solid rgba(0,0,0,.14)', borderRadius:6 }} />
+                  <select value={form.bank_type} onChange={e => s('bank_type', e.target.value)} style={{ padding:'8px 12px', fontSize:13, border:'1px solid rgba(0,0,0,.14)', borderRadius:6 }}>
+                    <option value="cuenta corriente">Corriente</option>
+                    <option value="cuenta de ahorros">Ahorros</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* PayPal */}
+          <div style={{ padding:16, border:'1px solid rgba(0,0,0,.08)', borderRadius:10, background: form.pay_paypal_enabled === 'true' ? 'rgba(46,125,82,.04)' : 'transparent' }}>
+            <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+              <input type="checkbox" checked={form.pay_paypal_enabled === 'true'} onChange={e => s('pay_paypal_enabled', e.target.checked ? 'true' : 'false')} />
+              <span style={{ fontWeight:500 }}>🅿️ PayPal</span>
+            </label>
+            {form.pay_paypal_enabled === 'true' && (
+              <div style={{ marginTop:10, paddingLeft:24 }}>
+                <input value={form.paypal_link} onChange={e => s('paypal_link', e.target.value)} placeholder="https://paypal.me/tubybega o tu email PayPal" style={{ width:'100%', padding:'8px 12px', fontSize:13, border:'1px solid rgba(0,0,0,.14)', borderRadius:6 }} />
+                <div style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>Crea un link en paypal.me para recibir pagos directamente.</div>
+              </div>
+            )}
+          </div>
+
+          {/* Card */}
+          <div style={{ padding:16, border:'1px solid rgba(0,0,0,.08)', borderRadius:10, background: form.pay_card_enabled === 'true' ? 'rgba(46,125,82,.04)' : 'transparent' }}>
+            <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+              <input type="checkbox" checked={form.pay_card_enabled === 'true'} onChange={e => s('pay_card_enabled', e.target.checked ? 'true' : 'false')} />
+              <span style={{ fontWeight:500 }}>💳 Tarjeta de crédito / débito</span>
+            </label>
+            {form.pay_card_enabled === 'true' && (
+              <div style={{ marginTop:10, paddingLeft:24 }}>
+                <input value={form.card_link} onChange={e => s('card_link', e.target.value)} placeholder="Link de cobro Wompi / Stripe / N1co" style={{ width:'100%', padding:'8px 12px', fontSize:13, border:'1px solid rgba(0,0,0,.14)', borderRadius:6 }} />
+                <div style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>Pega el link de tu pasarela (Wompi, Stripe, N1co…). El cliente paga ahí y luego confirmas en el sistema.</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Modo web */}
+        <div style={{ paddingTop:16, borderTop:'1px solid rgba(0,0,0,.08)' }}>
+          <div style={{ fontSize:13, fontWeight:500, marginBottom:8 }}>🌐 Modo de la web pública</div>
+          <div style={{ display:'flex', gap:10 }}>
+            <label style={{ flex:1, padding:14, border:`2px solid ${form.web_mode==='pedido'?'var(--gold)':'rgba(0,0,0,.08)'}`, borderRadius:10, cursor:'pointer', background: form.web_mode==='pedido' ? 'rgba(184,151,74,.06)' : 'transparent' }}>
+              <input type="radio" name="web_mode" checked={form.web_mode==='pedido'} onChange={() => s('web_mode','pedido')} style={{ marginRight:8 }} />
+              <strong style={{ fontSize:13 }}>Realizar pedido</strong>
+              <div style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>El cliente arma su pedido y lo envía. Llega como pedido pendiente al admin.</div>
+            </label>
+            <label style={{ flex:1, padding:14, border:`2px solid ${form.web_mode==='cotizacion'?'var(--gold)':'rgba(0,0,0,.08)'}`, borderRadius:10, cursor:'pointer', background: form.web_mode==='cotizacion' ? 'rgba(184,151,74,.06)' : 'transparent' }}>
+              <input type="radio" name="web_mode" checked={form.web_mode==='cotizacion'} onChange={() => s('web_mode','cotizacion')} style={{ marginRight:8 }} />
+              <strong style={{ fontSize:13 }}>Solicitar cotización</strong>
+              <div style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>El cliente solo expresa interés. Llega como oportunidad al CRM.</div>
+            </label>
+          </div>
+        </div>
+
+        <button className="btn btn-gold" onClick={saveAll} style={{ marginTop:18 }}>Guardar métodos de pago</button>
       </div>
 
       {/* Employees */}

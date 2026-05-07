@@ -3,17 +3,20 @@ import { supabase } from '../lib/supabase'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
+const PAY_LBL = { cash: 'Efectivo (contra entrega)', transfer: 'Transferencia bancaria', paypal: 'PayPal', card: 'Tarjeta' }
+const PAY_ICON = { cash: '💵', transfer: '🏦', paypal: '🅿️', card: '💳' }
+
 export default function WebView() {
   const [settings, setSettings] = useState({})
   const [categories, setCategories] = useState([])
   const [products, setProducts] = useState([])
   const [cat, setCat] = useState('todos')
-  const [selected, setSelected] = useState(new Set())
-  const [showQuote, setShowQuote] = useState(false)
-  const [submitted, setSubmitted] = useState(false)
+  const [selected, setSelected] = useState({})    // { id: qty }
+  const [showCart, setShowCart] = useState(false)
+  const [submitted, setSubmitted] = useState(null) // null | { method, orderNum, total }
   const [submitting, setSubmitting] = useState(false)
   const [qErr, setQErr] = useState('')
-  const [form, setForm] = useState({ name:'', surname:'', email:'', phone:'', instagram:'', message:'' })
+  const [form, setForm] = useState({ name:'', surname:'', email:'', phone:'', instagram:'', message:'', shipping_addr:'', payment_method:'' })
   const [contactForm, setContactForm] = useState({ name:'', email:'', phone:'', message:'' })
   const [menuOpen, setMenuOpen] = useState(false)
   const [carouselIdx, setCarouselIdx] = useState({})
@@ -30,7 +33,7 @@ export default function WebView() {
         supabase.from('settings').select('key,value'),
         supabase.from('categories').select('id,name,sort_order').order('sort_order'),
         supabase.from('products')
-          .select('id,name,ref,cat_id,price,original_price,material,description,emoji,featured,images,image_url')
+          .select('id,name,ref,cat_id,price,original_price,material,description,emoji,featured,images,image_url,stock_total')
           .eq('status', 'disponible')
           .order('created_at')
       ])
@@ -46,16 +49,37 @@ export default function WebView() {
   const usd = n => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
   const catName = id => categories.find(c => c.id === id)?.name || ''
 
+  const isOrderMode = (settings.web_mode || 'pedido') === 'pedido'
+  const ctaLabel = isOrderMode ? 'Realizar pedido' : 'Solicitar cotización'
+  const cartLabel = isOrderMode ? 'Tu pedido' : 'Tu cotización'
+  const addBtnLabel = (sel) => sel ? '✓ En el pedido' : (isOrderMode ? 'Añadir al pedido' : 'Seleccionar para cotización')
+
+  // Métodos disponibles según settings
+  const availableMethods = []
+  if (settings.pay_cash_enabled === 'true')     availableMethods.push('cash')
+  if (settings.pay_transfer_enabled === 'true') availableMethods.push('transfer')
+  if (settings.pay_paypal_enabled === 'true')   availableMethods.push('paypal')
+  if (settings.pay_card_enabled === 'true')     availableMethods.push('card')
+
   const toggle = (id) => {
     setSelected(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      const next = { ...prev }
+      if (next[id]) delete next[id]
+      else next[id] = 1
+      return next
+    })
+  }
+  const setQty = (id, q) => {
+    setSelected(prev => {
+      const next = { ...prev }
+      const qty = Math.max(1, parseInt(q) || 1)
+      if (next[id] !== undefined) next[id] = qty
       return next
     })
   }
 
-  const selProducts = products.filter(p => selected.has(p.id))
-  const selTotal = selProducts.reduce((a, p) => a + Number(p.price), 0)
+  const selProducts = products.filter(p => selected[p.id]).map(p => ({ ...p, qty: selected[p.id] }))
+  const selTotal = selProducts.reduce((a, p) => a + (Number(p.price) * p.qty), 0)
   const featured = products.filter(p => p.featured).slice(0, 5)
   const filtered = cat === 'todos' ? products : products.filter(p => p.cat_id === cat)
 
@@ -73,64 +97,97 @@ export default function WebView() {
     return data
   }
 
-  const submitQuote = async () => {
+  const submitOrder = async () => {
     const name = form.name.trim()
+    const surname = form.surname.trim()
     const email = form.email.trim().toLowerCase()
-    if (!name) { setQErr('Tu nombre es obligatorio'); return }
-    if (!EMAIL_RE.test(email)) { setQErr('Email no válido'); return }
+    const phone = form.phone.trim()
+    if (!name) return setQErr('Tu nombre es obligatorio')
+    if (isOrderMode && !surname) return setQErr('Apellido obligatorio')
+    if (isOrderMode && !phone) return setQErr('Teléfono obligatorio')
+    if (!EMAIL_RE.test(email)) return setQErr('Email no válido')
+    if (isOrderMode && availableMethods.length > 0 && !form.payment_method) return setQErr('Selecciona un método de pago')
     setSubmitting(true); setQErr('')
 
-    const prodNames = selProducts.map(p => `${p.name} (${usd(p.price)})`).join('\n')
+    const prodNames = selProducts.map(p => `${p.name} x${p.qty} (${usd(Number(p.price) * p.qty)})`).join('\n')
 
     try {
+      // 1) Cliente
       let clientId = null
       const { data: existing } = await supabase.from('clients').select('id').eq('email', email).maybeSingle()
       if (existing) {
         clientId = existing.id
       } else {
         const { data: newClient, error: cErr } = await supabase.from('clients').insert({
-          name, surname: form.surname.trim(), email,
-          phone: form.phone.trim(), instagram: form.instagram.trim(), segment: 'nuevo',
-          source: 'web', notes: `Lead desde web · ${new Date().toLocaleDateString('es-SV')}`
+          name, surname, email, phone, instagram: form.instagram.trim(),
+          shipping_addr: form.shipping_addr.trim(),
+          segment: 'nuevo', source: 'web',
+          notes: `Lead desde web · ${new Date().toLocaleDateString('es-SV')}`
         }).select('id').single()
         if (cErr) throw cErr
         clientId = newClient?.id
       }
 
+      // 2) Oportunidad
       if (clientId) {
         await supabase.from('opportunities').insert({
           client_id: clientId,
           title: `Web: ${selProducts.map(p => p.name).join(', ').slice(0, 60)}`,
           value: selTotal, stage: 'nueva',
           date: new Date().toISOString().slice(0, 10),
-          notes: (form.message ? form.message + '\n\n' : '') + 'Productos consultados:\n' + prodNames
+          notes: (form.message ? form.message + '\n\n' : '') + 'Productos:\n' + prodNames
         })
       }
 
+      // 3) Order (solo en modo pedido)
+      let orderNum = null
+      if (isOrderMode && clientId) {
+        const items = selProducts.map(p => ({
+          product_id: p.id, name: p.name, price: Number(p.price), qty: p.qty, sub: Number(p.price) * p.qty
+        }))
+        const { data: newOrder, error: oErr } = await supabase.from('orders').insert({
+          client_id: clientId,
+          items,
+          subtotal: selTotal,
+          iva_rate: 0,
+          iva_amt: 0,
+          total: selTotal,
+          status: 'pendiente',
+          date: new Date().toISOString().slice(0, 10),
+          notes: form.message || '',
+          shipping_addr: form.shipping_addr.trim(),
+          payment_method: form.payment_method,
+          source: 'web'
+        }).select('id').single()
+        if (!oErr && newOrder) orderNum = newOrder.id
+      }
+
+      // 4) Email de aviso
       const key = settings.web3forms_key
       if (key) {
-        const body = `NUEVA SOLICITUD WEB · ${settings.company || 'bybega'}\n\n` +
-          `CLIENTE:\nNombre: ${name} ${form.surname.trim()}\nEmail: ${email}\nTeléfono: ${form.phone.trim() || '—'}\nInstagram: ${form.instagram.trim() || '—'}\n\n` +
-          `PRODUCTOS CONSULTADOS:\n${prodNames}\nValor estimado: ${usd(selTotal)}\n\n` +
-          `MENSAJE:\n${form.message || '(Sin mensaje)'}\n\n---\nOportunidad creada en el CRM automáticamente.`
+        const subject = isOrderMode
+          ? `🛒 NUEVO PEDIDO web #${orderNum ? String(orderNum).padStart(3,'0') : '?'} - ${name} - ${settings.company || 'bybega'}`
+          : `✦ Consulta web - ${name} - ${settings.company || 'bybega'}`
+        const body = `${isOrderMode ? 'NUEVO PEDIDO DESDE WEB' : 'NUEVA SOLICITUD WEB'} · ${settings.company || 'bybega'}\n\n` +
+          `CLIENTE:\nNombre: ${name} ${surname}\nEmail: ${email}\nTeléfono: ${phone || '—'}\nInstagram: ${form.instagram || '—'}\n` +
+          (isOrderMode ? `Dirección: ${form.shipping_addr || '—'}\nMétodo de pago: ${PAY_LBL[form.payment_method] || form.payment_method}\n` : '') +
+          `\nPRODUCTOS:\n${prodNames}\nTotal: ${usd(selTotal)}\n\n` +
+          `MENSAJE:\n${form.message || '(sin mensaje)'}\n\n---\n${isOrderMode ? `Pedido #${orderNum} creado en estado PENDIENTE.` : 'Oportunidad creada en CRM.'}`
 
         try {
           await sendWeb3Forms(key, {
-            subject: `✦ Consulta web - ${name} - ${settings.company || 'bybega'}`,
-            name, email: settings.notif_email || settings.email,
+            subject, name, email: settings.notif_email || settings.email,
             replyto: email, message: body
           })
         } catch {
-          // El cliente y oportunidad sí se crearon. Solo el email falló.
-          // No bloqueamos la confirmación al usuario, pero log queda en consola.
-          console.warn('Email notification failed; lead saved in CRM')
+          console.warn('Email failed; data saved')
         }
       }
 
-      setSubmitted(true)
-      setSelected(new Set())
+      setSubmitted({ method: form.payment_method, orderNum, total: selTotal })
+      setSelected({})
     } catch (e) {
-      setQErr('Hubo un error al enviar tu solicitud. Por favor intenta por WhatsApp.')
+      setQErr('Hubo un error al enviar. Por favor intenta por WhatsApp.')
     }
     setSubmitting(false)
   }
@@ -176,15 +233,13 @@ export default function WebView() {
             subject: `✦ Mensaje web - ${name} - ${settings.company || 'bybega'}`,
             name, email: settings.notif_email || settings.email,
             replyto: email,
-            message: `MENSAJE DESDE LA WEB · ${settings.company || 'bybega'}\n\nNombre: ${name}\nEmail: ${email}\nTeléfono: ${contactForm.phone.trim() || '—'}\n\nMensaje:\n${message}\n\n---\nCliente y oportunidad creados automáticamente en el CRM.`
+            message: `MENSAJE WEB · ${settings.company || 'bybega'}\n\nNombre: ${name}\nEmail: ${email}\nTeléfono: ${contactForm.phone.trim() || '—'}\n\nMensaje:\n${message}`
           })
-        } catch {
-          console.warn('Email notification failed; contact saved in CRM')
-        }
+        } catch { /* swallow */ }
       }
       setContactSent(true)
     } catch {
-      setContactErr('Hubo un error al enviar el mensaje. Intenta por WhatsApp.')
+      setContactErr('Hubo un error. Intenta por WhatsApp.')
     }
     setContactSending(false)
   }
@@ -210,6 +265,87 @@ export default function WebView() {
           </>
         )}
       </>
+    )
+  }
+
+  const selCount = Object.keys(selected).length
+
+  // Pantalla de confirmación tras enviar pedido
+  if (submitted) {
+    const m = submitted.method
+    return (
+      <div className="qf-overlay" style={{ overflowY:'auto' }}>
+        <div className="qf-inner" style={{ paddingTop:60 }}>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ fontSize:48, marginBottom:16 }}>✦</div>
+            <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:32, color:'var(--gold)', marginBottom:10 }}>
+              {isOrderMode ? '¡Pedido recibido!' : '¡Solicitud enviada!'}
+            </div>
+            {isOrderMode && submitted.orderNum && (
+              <div style={{ fontSize:14, color:'var(--muted)', marginBottom:20 }}>
+                Pedido <strong style={{ color:'var(--gold-l)' }}>#{String(submitted.orderNum).padStart(3,'0')}</strong> · Total {usd(submitted.total)}
+              </div>
+            )}
+          </div>
+
+          {isOrderMode && m === 'transfer' && (
+            <div style={{ background:'rgba(184,151,74,.08)', border:'1px solid var(--border)', borderRadius:10, padding:24, marginBottom:20 }}>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color:'var(--gold)', marginBottom:14 }}>🏦 Datos para transferencia</div>
+              <div style={{ fontSize:14, lineHeight:2.2, color:'#ddd' }}>
+                <div>Banco: <strong style={{ color:'#fff' }}>{settings.bank_name || '—'}</strong></div>
+                <div>Titular: <strong style={{ color:'#fff' }}>{settings.bank_holder || '—'}</strong></div>
+                <div>Cuenta ({settings.bank_type || '—'}): <strong style={{ color:'#fff' }}>{settings.bank_account || '—'}</strong></div>
+                <div>Referencia: <strong style={{ color:'#fff' }}>Pedido #{submitted.orderNum && String(submitted.orderNum).padStart(3,'0')}</strong></div>
+                <div>Monto: <strong style={{ color:'var(--gold-l)' }}>{usd(submitted.total)}</strong></div>
+              </div>
+              <div style={{ marginTop:14, fontSize:12, color:'var(--muted)' }}>
+                Tras transferir, envíanos el comprobante por WhatsApp citando el pedido <strong>#{submitted.orderNum && String(submitted.orderNum).padStart(3,'0')}</strong>.
+              </div>
+            </div>
+          )}
+
+          {isOrderMode && m === 'paypal' && settings.paypal_link && (
+            <div style={{ background:'rgba(184,151,74,.08)', border:'1px solid var(--border)', borderRadius:10, padding:24, marginBottom:20, textAlign:'center' }}>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color:'var(--gold)', marginBottom:14 }}>🅿️ Pagar con PayPal</div>
+              <a href={settings.paypal_link.startsWith('http') ? settings.paypal_link : `https://paypal.me/${settings.paypal_link}`} target="_blank" rel="noreferrer"
+                 style={{ display:'inline-block', padding:'12px 28px', background:'#0070ba', color:'#fff', borderRadius:8, fontSize:14, fontWeight:500, textDecoration:'none' }}>
+                Ir a PayPal · {usd(submitted.total)}
+              </a>
+              <div style={{ marginTop:12, fontSize:12, color:'var(--muted)' }}>Indica en el concepto: Pedido #{submitted.orderNum && String(submitted.orderNum).padStart(3,'0')}</div>
+            </div>
+          )}
+
+          {isOrderMode && m === 'card' && settings.card_link && (
+            <div style={{ background:'rgba(184,151,74,.08)', border:'1px solid var(--border)', borderRadius:10, padding:24, marginBottom:20, textAlign:'center' }}>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color:'var(--gold)', marginBottom:14 }}>💳 Pagar con tarjeta</div>
+              <a href={settings.card_link} target="_blank" rel="noreferrer"
+                 style={{ display:'inline-block', padding:'12px 28px', background:'var(--gold)', color:'var(--dark)', borderRadius:8, fontSize:14, fontWeight:500, textDecoration:'none' }}>
+                Ir al pago · {usd(submitted.total)}
+              </a>
+              <div style={{ marginTop:12, fontSize:12, color:'var(--muted)' }}>Indica en el concepto: Pedido #{submitted.orderNum && String(submitted.orderNum).padStart(3,'0')}</div>
+            </div>
+          )}
+
+          {isOrderMode && m === 'cash' && (
+            <div style={{ background:'rgba(184,151,74,.08)', border:'1px solid var(--border)', borderRadius:10, padding:24, marginBottom:20 }}>
+              <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:20, color:'var(--gold)', marginBottom:10 }}>💵 Pago contra entrega</div>
+              <div style={{ fontSize:14, color:'#ddd', lineHeight:1.7 }}>
+                Tu pedido fue recibido. Te contactaremos por WhatsApp para coordinar la entrega y el cobro en efectivo.
+              </div>
+            </div>
+          )}
+
+          <div style={{ fontSize:14, color:'var(--muted)', lineHeight:1.8, maxWidth:520, margin:'0 auto', textAlign:'center' }}>
+            También recibirás los detalles en tu correo. Si tienes cualquier duda, escríbenos por WhatsApp.
+          </div>
+          <div style={{ textAlign:'center', marginTop:32 }}>
+            <button onClick={() => { setSubmitted(null); setShowCart(false); setForm({ name:'', surname:'', email:'', phone:'', instagram:'', message:'', shipping_addr:'', payment_method:'' }) }}
+              style={{ background:'var(--gold)', color:'var(--dark)', border:'none', padding:'12px 28px', borderRadius:8, fontSize:14, cursor:'pointer', fontFamily:'DM Sans,sans-serif' }}>
+              Seguir explorando →
+            </button>
+          </div>
+        </div>
+      </div>
     )
   }
 
@@ -261,11 +397,11 @@ export default function WebView() {
           <div className="web-divider" />
           <div className="web-featured-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 20 }}>
             {featured.map(p => (
-              <div key={p.id} className={`web-card${selected.has(p.id) ? ' sel' : ''}`}>
+              <div key={p.id} className={`web-card${selected[p.id] ? ' sel' : ''}`}>
                 <div className="web-card-img" style={{ padding:0, overflow:'hidden', position:'relative' }}>
                   {renderImg(p)}
                   <span className="web-feat-badge">★ Dest.</span>
-                  {selected.has(p.id) && <span className="web-check">✓</span>}
+                  {selected[p.id] && <span className="web-check">✓</span>}
                 </div>
                 <div className="web-card-body">
                   <div className="web-card-name">{p.name}</div>
@@ -275,8 +411,8 @@ export default function WebView() {
                     <span className="web-card-price" style={{ marginTop:0 }}>{usd(p.price)}</span>
                     {p.original_price && Number(p.original_price) > Number(p.price) && <span style={{ background:'rgba(192,57,43,.7)', color:'#fff', fontSize:10, padding:'2px 6px', borderRadius:4, fontWeight:500 }}>-{Math.round((1-p.price/p.original_price)*100)}%</span>}
                   </div>
-                  <button className={`web-card-btn${selected.has(p.id) ? ' sel-active' : ''}`} onClick={() => toggle(p.id)}>
-                    {selected.has(p.id) ? '✓ Seleccionado' : 'Seleccionar para cotización'}
+                  <button className={`web-card-btn${selected[p.id] ? ' sel-active' : ''}`} onClick={() => toggle(p.id)}>
+                    {addBtnLabel(selected[p.id])}
                   </button>
                 </div>
               </div>
@@ -287,7 +423,7 @@ export default function WebView() {
 
       <div id="web-catalog" className="web-section">
         <div className="web-section-title">Catálogo Completo</div>
-        <div className="web-section-sub">{products.length} piezas disponibles · selecciona varias para cotizar juntas</div>
+        <div className="web-section-sub">{products.length} piezas disponibles · {isOrderMode ? 'arma tu pedido' : 'selecciona varias para cotizar juntas'}</div>
         <div className="web-divider" />
         <div className="web-cats">
           <button className={`web-cat-btn${cat === 'todos' ? ' active' : ''}`} onClick={() => setCat('todos')}>Todos ({products.length})</button>
@@ -302,11 +438,11 @@ export default function WebView() {
         </div>
         <div className="web-grid">
           {filtered.map(p => (
-            <div key={p.id} className={`web-card${selected.has(p.id) ? ' sel' : ''}`}>
+            <div key={p.id} className={`web-card${selected[p.id] ? ' sel' : ''}`}>
               <div className="web-card-img" style={{ padding:0, overflow:'hidden', position:'relative' }}>
                 {renderImg(p)}
                 {p.featured && <span className="web-feat-badge">★ Dest.</span>}
-                {selected.has(p.id) && <span className="web-check">✓</span>}
+                {selected[p.id] && <span className="web-check">✓</span>}
               </div>
               <div className="web-card-body">
                 <div className="web-card-name">{p.name}</div>
@@ -316,8 +452,8 @@ export default function WebView() {
                   <span className="web-card-price" style={{ marginTop:0 }}>{usd(p.price)}</span>
                   {p.original_price && Number(p.original_price) > Number(p.price) && <span style={{ background:'rgba(192,57,43,.7)', color:'#fff', fontSize:10, padding:'2px 6px', borderRadius:4, fontWeight:500 }}>-{Math.round((1-p.price/p.original_price)*100)}%</span>}
                 </div>
-                <button className={`web-card-btn${selected.has(p.id) ? ' sel-active' : ''}`} onClick={() => toggle(p.id)}>
-                  {selected.has(p.id) ? '✓ Seleccionado' : 'Seleccionar para cotización'}
+                <button className={`web-card-btn${selected[p.id] ? ' sel-active' : ''}`} onClick={() => toggle(p.id)}>
+                  {addBtnLabel(selected[p.id])}
                 </button>
                 <button className="web-card-btn" style={{ opacity: .7, marginTop: 4 }} onClick={() => window.open(`https://wa.me/${wa}?text=${encodeURIComponent(`Hola! Me interesa "${p.name}" de bybega. ¿Está disponible?`)}`, '_blank')}>
                   Consultar por WhatsApp
@@ -340,10 +476,8 @@ export default function WebView() {
               {settings.instagram && <div>📷 {settings.instagram}</div>}
               {settings.address && <div>📍 {settings.address}</div>}
             </div>
-            <button
-              onClick={() => window.open(`https://wa.me/${wa}?text=${encodeURIComponent('Hola! Me gustaría consultar sobre sus joyas.')}`, '_blank')}
-              style={{ marginTop: 20, background: '#25d366', color: '#fff', border: 'none', borderRadius: 8, padding: '11px 22px', fontSize: 13, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 500 }}
-            >
+            <button onClick={() => window.open(`https://wa.me/${wa}?text=${encodeURIComponent('Hola! Me gustaría consultar sobre sus joyas.')}`, '_blank')}
+              style={{ marginTop: 20, background: '#25d366', color: '#fff', border: 'none', borderRadius: 8, padding: '11px 22px', fontSize: 13, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 500 }}>
               💬 Escribir por WhatsApp
             </button>
           </div>
@@ -364,23 +498,15 @@ export default function WebView() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div>
-                    <label className="qf-label">Nombre *</label>
-                    <input className="qf-input" maxLength={80} value={contactForm.name} onChange={e => setContactForm(p => ({...p, name: e.target.value}))} placeholder="Tu nombre" />
-                  </div>
-                  <div>
-                    <label className="qf-label">Teléfono</label>
-                    <input className="qf-input" maxLength={30} value={contactForm.phone} onChange={e => setContactForm(p => ({...p, phone: e.target.value}))} placeholder="+503 7000-0000" />
-                  </div>
+                  <div><label className="qf-label">Nombre *</label>
+                    <input className="qf-input" maxLength={80} value={contactForm.name} onChange={e => setContactForm(p => ({...p, name: e.target.value}))} placeholder="Tu nombre" /></div>
+                  <div><label className="qf-label">Teléfono</label>
+                    <input className="qf-input" maxLength={30} value={contactForm.phone} onChange={e => setContactForm(p => ({...p, phone: e.target.value}))} placeholder="+503 7000-0000" /></div>
                 </div>
-                <div>
-                  <label className="qf-label">Email *</label>
-                  <input className="qf-input" type="email" maxLength={120} value={contactForm.email} onChange={e => setContactForm(p => ({...p, email: e.target.value}))} placeholder="tu@email.com" />
-                </div>
-                <div>
-                  <label className="qf-label">Mensaje *</label>
-                  <textarea className="qf-input" maxLength={1500} rows={3} value={contactForm.message} onChange={e => setContactForm(p => ({...p, message: e.target.value}))} placeholder="¿En qué podemos ayudarte?" style={{ resize: 'vertical' }} />
-                </div>
+                <div><label className="qf-label">Email *</label>
+                  <input className="qf-input" type="email" maxLength={120} value={contactForm.email} onChange={e => setContactForm(p => ({...p, email: e.target.value}))} placeholder="tu@email.com" /></div>
+                <div><label className="qf-label">Mensaje *</label>
+                  <textarea className="qf-input" maxLength={1500} rows={3} value={contactForm.message} onChange={e => setContactForm(p => ({...p, message: e.target.value}))} placeholder="¿En qué podemos ayudarte?" style={{ resize: 'vertical' }} /></div>
                 {contactErr && <div style={{ color: '#e57373', fontSize: 12 }}>{contactErr}</div>}
                 <button onClick={submitContactForm} disabled={contactSending}
                   style={{ background: 'var(--gold)', color: 'var(--dark)', border: 'none', padding: '12px', borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', opacity: contactSending ? .7 : 1 }}>
@@ -409,88 +535,120 @@ export default function WebView() {
         </div>
       </footer>
 
-      {selected.size > 0 && !showQuote && (
+      {selCount > 0 && !showCart && (
         <div className="web-sel-bar">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ color: 'var(--gold)', fontFamily: 'Cormorant Garamond, serif', fontSize: 20 }}>{selected.size} producto{selected.size !== 1 ? 's' : ''}</span>
-            <span style={{ color: 'var(--muted)', fontSize: 12 }}>seleccionados · {usd(selTotal)}</span>
+            <span style={{ color: 'var(--gold)', fontFamily: 'Cormorant Garamond, serif', fontSize: 20 }}>{selCount} producto{selCount !== 1 ? 's' : ''}</span>
+            <span style={{ color: 'var(--muted)', fontSize: 12 }}>en {cartLabel.toLowerCase()} · {usd(selTotal)}</span>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => setSelected(new Set())} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.15)', color: 'var(--muted)', padding: '9px 18px', borderRadius: 8, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontSize: 13 }}>Limpiar</button>
-            <button className="web-cta web-cta-gold" style={{ padding: '10px 24px', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontSize: 14, fontWeight: 500, background: 'var(--gold)', color: 'var(--dark)' }} onClick={() => { setShowQuote(true); setSubmitted(false); setForm({ name:'', surname:'', email:'', phone:'', instagram:'', message:'' }) }}>
-              Solicitar cotización →
+            <button onClick={() => setSelected({})} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.15)', color: 'var(--muted)', padding: '9px 18px', borderRadius: 8, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontSize: 13 }}>Limpiar</button>
+            <button className="web-cta web-cta-gold" style={{ padding: '10px 24px', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontSize: 14, fontWeight: 500, background: 'var(--gold)', color: 'var(--dark)' }} onClick={() => { setShowCart(true); setForm({ name:'', surname:'', email:'', phone:'', instagram:'', message:'', shipping_addr:'', payment_method: availableMethods[0] || '' }) }}>
+              {ctaLabel} →
             </button>
           </div>
         </div>
       )}
 
-      {showQuote && (
+      {showCart && (
         <div className="qf-overlay">
           <div className="qf-inner">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
-              <button onClick={() => setShowQuote(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 13, fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 6 }}>← Volver al catálogo</button>
+              <button onClick={() => setShowCart(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 13, fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 6 }}>← Volver al catálogo</button>
               <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 22, color: 'var(--gold)', letterSpacing: 2 }}>{settings.company || 'bybega'}</div>
             </div>
 
-            {!submitted ? (
-              <>
-                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 30, color: '#fff', fontWeight: 300, marginBottom: 4 }}>Tu solicitud de cotización</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 28 }}>Te respondemos en menos de 24 horas</div>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 30, color: '#fff', fontWeight: 300, marginBottom: 4 }}>{cartLabel}</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 28 }}>
+              {isOrderMode ? 'Confirma cantidades, datos y método de pago' : 'Te respondemos en menos de 24 horas'}
+            </div>
 
-                <div style={{ marginBottom: 28 }}>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Productos seleccionados</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(130px,1fr))', gap: 10 }}>
-                    {selProducts.map(p => (
-                      <div key={p.id} style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 8, padding: 10, textAlign: 'center' }}>
-                        <div style={{ fontSize: 28, marginBottom: 4 }}>{p.emoji}</div>
-                        <div style={{ fontSize: 12, color: '#ccc', fontWeight: 500 }}>{p.name}</div>
-                        <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 16, color: 'var(--gold)', marginTop: 3 }}>{usd(p.price)}</div>
-                        <button onClick={() => toggle(p.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 11, cursor: 'pointer', marginTop: 4 }}>✕ Quitar</button>
-                      </div>
-                    ))}
+            {/* Productos seleccionados con cantidad */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Productos</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {selProducts.map(p => (
+                  <div key={p.id} style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 8, padding: '12px 14px', display:'grid', gridTemplateColumns:'48px 1fr 90px 80px 28px', gap:12, alignItems:'center' }}>
+                    <div style={{ width:48, height:48, borderRadius:6, overflow:'hidden', background:'rgba(255,255,255,.03)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:24 }}>
+                      {p.images?.[0] ? <img src={p.images[0]} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : p.emoji}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, color: '#fff', fontWeight: 500 }}>{p.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{usd(p.price)} c/u</div>
+                    </div>
+                    <input type="number" min="1" value={p.qty} onChange={e => setQty(p.id, e.target.value)}
+                      style={{ background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.1)', color:'#fff', padding:'7px 10px', borderRadius:6, fontSize:13, width:80 }} />
+                    <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 18, color: 'var(--gold)', textAlign:'right' }}>{usd(Number(p.price) * p.qty)}</span>
+                    <button onClick={() => toggle(p.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 14, cursor: 'pointer' }}>✕</button>
                   </div>
-                  <div style={{ marginTop: 14, padding: '12px 16px', background: 'rgba(184,151,74,.08)', border: '1px solid var(--border)', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, color: 'var(--muted)' }}>Valor estimado total</span>
-                    <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 22, color: 'var(--gold)' }}>{usd(selTotal)}</span>
-                  </div>
-                </div>
+                ))}
+              </div>
+              <div style={{ marginTop: 14, padding: '12px 16px', background: 'rgba(184,151,74,.08)', border: '1px solid var(--border)', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--muted)' }}>Total</span>
+                <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 22, color: 'var(--gold)' }}>{usd(selTotal)}</span>
+              </div>
+            </div>
 
-                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,.06)' }}>Tus datos de contacto</div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                  <div><label className="qf-label">Nombre *</label><input className="qf-input" maxLength={80} value={form.name} onChange={e => sf('name', e.target.value)} placeholder="Tu nombre" /></div>
-                  <div><label className="qf-label">Apellido</label><input className="qf-input" maxLength={80} value={form.surname} onChange={e => sf('surname', e.target.value)} placeholder="Tu apellido" /></div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                  <div><label className="qf-label">Email *</label><input className="qf-input" type="email" maxLength={120} value={form.email} onChange={e => sf('email', e.target.value)} placeholder="tu@email.com" /></div>
-                  <div><label className="qf-label">Teléfono / WhatsApp</label><input className="qf-input" maxLength={30} value={form.phone} onChange={e => sf('phone', e.target.value)} placeholder="+503 7000-0000" /></div>
-                </div>
-                <div style={{ marginBottom: 14 }}><label className="qf-label">Instagram (opcional)</label><input className="qf-input" maxLength={60} value={form.instagram} onChange={e => sf('instagram', e.target.value)} placeholder="@tuusuario" /></div>
-                <div style={{ marginBottom: 24 }}><label className="qf-label">Mensaje (opcional)</label><textarea className="qf-input" maxLength={1500} rows={3} value={form.message} onChange={e => sf('message', e.target.value)} placeholder="Ej: Es un regalo de aniversario, me gustaría personalizar el grabado…" style={{ resize: 'vertical' }} /></div>
-
-                {qErr && <div style={{ color: '#e57373', fontSize: 12, marginBottom: 10 }}>{qErr}</div>}
-                <button onClick={submitQuote} disabled={submitting} style={{ width: '100%', background: 'var(--gold)', color: 'var(--dark)', border: 'none', padding: 15, borderRadius: 10, fontSize: 15, fontWeight: 500, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', opacity: submitting ? .7 : 1 }}>
-                  {submitting ? 'Enviando…' : 'Enviar solicitud de cotización →'}
-                </button>
-                <div style={{ textAlign: 'center', marginTop: 14, fontSize: 11, color: 'var(--muted)' }}>Al enviar aceptas que nos contactemos contigo para responder tu consulta.</div>
-              </>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '60px 0' }}>
-                <div style={{ fontSize: 48, marginBottom: 16 }}>✦</div>
-                <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 32, color: 'var(--gold)', marginBottom: 10 }}>¡Solicitud enviada!</div>
-                <div style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.8, maxWidth: 400, margin: '0 auto' }}>
-                  Hemos recibido tu consulta y te responderemos en menos de 24 horas. Revisa también tu correo.
-                </div>
-                <button onClick={() => setShowQuote(false)} style={{ marginTop: 32, background: 'var(--gold)', color: 'var(--dark)', border: 'none', padding: '12px 28px', borderRadius: 8, fontSize: 14, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
-                  Seguir explorando →
-                </button>
+            {/* Datos de contacto */}
+            <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,.06)' }}>Tus datos</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+              <div><label className="qf-label">Nombre *</label><input className="qf-input" maxLength={80} value={form.name} onChange={e => sf('name', e.target.value)} placeholder="Tu nombre" /></div>
+              <div><label className="qf-label">Apellido {isOrderMode && '*'}</label><input className="qf-input" maxLength={80} value={form.surname} onChange={e => sf('surname', e.target.value)} placeholder="Tu apellido" /></div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+              <div><label className="qf-label">Email *</label><input className="qf-input" type="email" maxLength={120} value={form.email} onChange={e => sf('email', e.target.value)} placeholder="tu@email.com" /></div>
+              <div><label className="qf-label">Teléfono / WhatsApp {isOrderMode && '*'}</label><input className="qf-input" maxLength={30} value={form.phone} onChange={e => sf('phone', e.target.value)} placeholder="+503 7000-0000" /></div>
+            </div>
+            {isOrderMode && (
+              <div style={{ marginBottom: 14 }}>
+                <label className="qf-label">Dirección de envío</label>
+                <input className="qf-input" maxLength={200} value={form.shipping_addr} onChange={e => sf('shipping_addr', e.target.value)} placeholder="Dirección completa o 'recogeré en tienda'" />
               </div>
             )}
+            <div style={{ marginBottom: 14 }}>
+              <label className="qf-label">Instagram (opcional)</label>
+              <input className="qf-input" maxLength={60} value={form.instagram} onChange={e => sf('instagram', e.target.value)} placeholder="@tuusuario" />
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              <label className="qf-label">Mensaje / detalles</label>
+              <textarea className="qf-input" maxLength={1500} rows={2} value={form.message} onChange={e => sf('message', e.target.value)} placeholder="Talla, ocasión, personalización…" style={{ resize: 'vertical' }} />
+            </div>
+
+            {/* Métodos de pago — solo en modo pedido */}
+            {isOrderMode && availableMethods.length > 0 && (
+              <>
+                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,.06)' }}>Método de pago *</div>
+                <div style={{ display:'grid', gap:10, marginBottom:24 }}>
+                  {availableMethods.map(m => (
+                    <label key={m} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 16px', background: form.payment_method === m ? 'rgba(184,151,74,.12)' : 'rgba(255,255,255,.03)', border: `1px solid ${form.payment_method === m ? 'var(--gold)' : 'rgba(255,255,255,.08)'}`, borderRadius:10, cursor:'pointer' }}>
+                      <input type="radio" name="pmethod" value={m} checked={form.payment_method === m} onChange={() => sf('payment_method', m)} style={{ accentColor: 'var(--gold)' }} />
+                      <span style={{ fontSize:22 }}>{PAY_ICON[m]}</span>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:14, color:'#fff', fontWeight:500 }}>{PAY_LBL[m]}</div>
+                        {m === 'transfer' && settings.bank_name && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{settings.bank_name} · te pasaremos los datos al confirmar</div>}
+                        {m === 'cash' && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>Pagarás al recibir tu pedido</div>}
+                        {m === 'paypal' && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>Te enviaremos el link de pago</div>}
+                        {m === 'card' && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>Pago seguro online</div>}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {qErr && <div style={{ color: '#e57373', fontSize: 12, marginBottom: 10 }}>{qErr}</div>}
+            <button onClick={submitOrder} disabled={submitting || selCount === 0}
+              style={{ width: '100%', background: 'var(--gold)', color: 'var(--dark)', border: 'none', padding: 15, borderRadius: 10, fontSize: 15, fontWeight: 500, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', opacity: submitting || selCount === 0 ? .6 : 1 }}>
+              {submitting ? 'Enviando…' : `${ctaLabel} · ${usd(selTotal)} →`}
+            </button>
+            <div style={{ textAlign: 'center', marginTop: 14, fontSize: 11, color: 'var(--muted)' }}>
+              {isOrderMode ? 'Al enviar, recibiremos tu pedido y te contactaremos para confirmar.' : 'Al enviar aceptas que nos contactemos contigo.'}
+            </div>
           </div>
         </div>
       )}
 
-      <a className="web-wa" href={`https://wa.me/${wa}?text=${encodeURIComponent('Hola! Me gustaría ver el catálogo de bybega.')}`} target="_blank" rel="noreferrer" style={{ bottom: selected.size > 0 && !showQuote ? 90 : 24 }} aria-label="WhatsApp">💬</a>
+      <a className="web-wa" href={`https://wa.me/${wa}?text=${encodeURIComponent('Hola! Me gustaría ver el catálogo de bybega.')}`} target="_blank" rel="noreferrer" style={{ bottom: selCount > 0 && !showCart ? 90 : 24 }} aria-label="WhatsApp">💬</a>
     </div>
   )
 }
