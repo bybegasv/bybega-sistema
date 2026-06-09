@@ -1,11 +1,15 @@
 import { useState, useRef } from 'react'
 import { useData } from '../context/DataContext'
 import { supabase } from '../lib/supabase'
+import { downloadTemplate, exportProducts, parseImportFile, validateRows, chunk } from '../lib/productsXlsx'
 
 const EMOJIS = ['💍','📿','✨','💎','🔮','⭐','🌟','👑','💫','🌸','🦋','✦']
 const STATUS_CLS = { disponible:'tg-g', reservado:'tg', vendido:'tg-r', agotado:'tg-gray' }
 const MAX_PHOTOS = 5
 
+// ════════════════════════════════════════════════════════════════
+// PRODUCT MODAL (alta / edición)
+// ════════════════════════════════════════════════════════════════
 function ProductModal({ prod, cats, onSave, onClose }) {
   const [form, setForm] = useState({
     name: prod?.name || '', ref: prod?.ref || '',
@@ -143,12 +147,126 @@ function ProductModal({ prod, cats, onSave, onClose }) {
   )
 }
 
+// ════════════════════════════════════════════════════════════════
+// IMPORT MODAL — previsualización y confirmación
+// ════════════════════════════════════════════════════════════════
+function ImportModal({ result, onConfirm, onClose, busy, progress }) {
+  if (!result) return null
+  const { toCreate, toUpdate, errors, newCategories, skipped } = result
+  const total = toCreate.length + toUpdate.length
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && !busy && onClose()}>
+      <div className="modal-box lg" style={{ width:'min(820px, 96vw)' }}>
+        <div className="modal-title">Importar productos · Previsualización</div>
+
+        {/* Resumen */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:18 }}>
+          <div style={{ background:'rgba(46,125,82,.08)', padding:'12px 14px', borderRadius:8, borderLeft:'3px solid var(--success)' }}>
+            <div style={{ fontSize:10, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1 }}>Crear</div>
+            <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:28, color:'var(--success)' }}>{toCreate.length}</div>
+          </div>
+          <div style={{ background:'rgba(184,151,74,.08)', padding:'12px 14px', borderRadius:8, borderLeft:'3px solid var(--gold)' }}>
+            <div style={{ fontSize:10, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1 }}>Actualizar</div>
+            <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:28, color:'var(--gold)' }}>{toUpdate.length}</div>
+          </div>
+          <div style={{ background:'rgba(26,82,118,.06)', padding:'12px 14px', borderRadius:8, borderLeft:'3px solid var(--info)' }}>
+            <div style={{ fontSize:10, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1 }}>Nuevas categorías</div>
+            <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:28, color:'var(--info)' }}>{newCategories.length}</div>
+          </div>
+          <div style={{ background: errors.length ? 'rgba(192,57,43,.06)' : '#f9f7f4', padding:'12px 14px', borderRadius:8, borderLeft:`3px solid ${errors.length ? 'var(--danger)' : '#ccc'}` }}>
+            <div style={{ fontSize:10, color:'var(--muted)', textTransform:'uppercase', letterSpacing:1 }}>Errores</div>
+            <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:28, color: errors.length ? 'var(--danger)' : 'var(--muted)' }}>{errors.length}</div>
+          </div>
+        </div>
+
+        {/* Categorías a crear */}
+        {newCategories.length > 0 && (
+          <div style={{ background:'#f9f7f4', padding:'12px 16px', borderRadius:8, marginBottom:14, fontSize:13 }}>
+            <strong>Se crearán {newCategories.length} categoría{newCategories.length !== 1 ? 's' : ''} nueva{newCategories.length !== 1 ? 's' : ''}:</strong>{' '}
+            {newCategories.join(', ')}
+          </div>
+        )}
+
+        {/* Errores */}
+        {errors.length > 0 && (
+          <div style={{ maxHeight:140, overflowY:'auto', background:'rgba(192,57,43,.04)', border:'1px solid rgba(192,57,43,.18)', borderRadius:8, padding:'10px 14px', marginBottom:14 }}>
+            <div style={{ fontSize:12, fontWeight:600, color:'var(--danger)', marginBottom:6 }}>Filas con errores (no se importarán):</div>
+            <ul style={{ fontSize:12, color:'var(--mid)', paddingLeft:18, margin:0 }}>
+              {errors.map((e, i) => <li key={i}>Fila {e.row}: {e.message}</li>)}
+            </ul>
+          </div>
+        )}
+
+        {/* Previsualización de las primeras filas */}
+        {total > 0 && (
+          <div style={{ maxHeight:260, overflowY:'auto', border:'1px solid var(--border)', borderRadius:8 }}>
+            <table style={{ width:'100%', fontSize:12, borderCollapse:'collapse' }}>
+              <thead style={{ background:'#f9f7f4', position:'sticky', top:0 }}>
+                <tr>
+                  <th style={{ padding:'8px 10px', textAlign:'left', borderBottom:'1px solid var(--border)' }}>Acción</th>
+                  <th style={{ padding:'8px 10px', textAlign:'left', borderBottom:'1px solid var(--border)' }}>Nombre</th>
+                  <th style={{ padding:'8px 10px', textAlign:'left', borderBottom:'1px solid var(--border)' }}>Ref</th>
+                  <th style={{ padding:'8px 10px', textAlign:'left', borderBottom:'1px solid var(--border)' }}>Categoría</th>
+                  <th style={{ padding:'8px 10px', textAlign:'right', borderBottom:'1px solid var(--border)' }}>Precio</th>
+                  <th style={{ padding:'8px 10px', textAlign:'right', borderBottom:'1px solid var(--border)' }}>Stock</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...toCreate.map(r => ({...r, action:'crear'})), ...toUpdate.map(r => ({...r, action:'actualizar'}))].slice(0, 30).map((r, i) => (
+                  <tr key={i}>
+                    <td style={{ padding:'6px 10px', borderBottom:'1px solid #f0eee8' }}>
+                      <span className={`tag ${r.action === 'crear' ? 'tg-g' : 'tg'}`} style={{ fontSize:10 }}>{r.action}</span>
+                    </td>
+                    <td style={{ padding:'6px 10px', borderBottom:'1px solid #f0eee8' }}>{r.data.name}</td>
+                    <td style={{ padding:'6px 10px', borderBottom:'1px solid #f0eee8', fontFamily:'monospace' }}>{r.data.ref || '—'}</td>
+                    <td style={{ padding:'6px 10px', borderBottom:'1px solid #f0eee8' }}>{r.data.cat_name}</td>
+                    <td style={{ padding:'6px 10px', borderBottom:'1px solid #f0eee8', textAlign:'right' }}>${Number(r.data.price).toFixed(2)}</td>
+                    <td style={{ padding:'6px 10px', borderBottom:'1px solid #f0eee8', textAlign:'right' }}>{r.data.stock_total}</td>
+                  </tr>
+                ))}
+                {(toCreate.length + toUpdate.length) > 30 && (
+                  <tr><td colSpan={6} style={{ padding:'10px', textAlign:'center', color:'var(--muted)', fontStyle:'italic' }}>
+                    … y {toCreate.length + toUpdate.length - 30} fila{(toCreate.length + toUpdate.length - 30) !== 1 ? 's' : ''} más
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {skipped > 0 && <div style={{ fontSize:11, color:'var(--muted)', marginTop:8 }}>Se omitieron {skipped} fila{skipped !== 1 ? 's' : ''} vacía{skipped !== 1 ? 's' : ''}.</div>}
+
+        {busy && (
+          <div style={{ marginTop:14, padding:'10px 14px', background:'rgba(184,151,74,.08)', borderRadius:6, fontSize:13 }}>
+            Importando… {progress.done}/{progress.total}
+          </div>
+        )}
+
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose} disabled={busy}>Cancelar</button>
+          <button className="btn btn-gold" onClick={onConfirm} disabled={busy || total === 0}>
+            {busy ? 'Importando…' : `Confirmar importación (${total} producto${total !== 1 ? 's' : ''})`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// PRODUCTS PAGE
+// ════════════════════════════════════════════════════════════════
 export default function Products() {
-  const { products, categories, saveProduct, deleteProduct, toggleFeatured, catName, usd } = useData()
+  const { products, categories, saveProduct, deleteProduct, toggleFeatured, saveCategory, catName, usd, showToast } = useData()
   const [modal, setModal] = useState(null)
   const [cat, setCat] = useState('todos')
   const [q, setQ] = useState('')
   const [storeFilter, setStoreFilter] = useState('todos')
+  const importRef = useRef()
+  const [importResult, setImportResult] = useState(null)
+  const [importBusy, setImportBusy] = useState(false)
+  const [importProgress, setImportProgress] = useState({ done: 0, total: 0 })
 
   const featured = products.filter(p => p.featured).length
   const lowStock = products.filter(p => p.stock_total > 0 && p.stock_total <= (p.low_stock_alert || 3)).length
@@ -169,6 +287,64 @@ export default function Products() {
     await deleteProduct(id)
   }
 
+  // ── IMPORTACIÓN ─────────────────────────────────────────────
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const rows = await parseImportFile(file)
+      const result = validateRows(rows, { categories, products })
+      setImportResult(result)
+    } catch (err) {
+      alert('No pudimos leer el archivo: ' + (err.message || err))
+    }
+    if (importRef.current) importRef.current.value = ''
+  }
+
+  const handleImportConfirm = async () => {
+    if (!importResult) return
+    setImportBusy(true)
+    const total = importResult.toCreate.length + importResult.toUpdate.length + importResult.newCategories.length
+    let done = 0
+    setImportProgress({ done, total })
+
+    // 1) Crear categorías faltantes
+    const catNameMap = {}
+    categories.forEach(c => { catNameMap[c.name.trim().toLowerCase()] = c.id })
+
+    for (const name of importResult.newCategories) {
+      const { data, error } = await supabase.from('categories').insert({ name, color: 'tg', sort_order: categories.length + 1 }).select('id,name').single()
+      if (!error && data) catNameMap[name.toLowerCase()] = data.id
+      done++; setImportProgress({ done, total })
+    }
+
+    const resolveCat = (catName) => catNameMap[String(catName).trim().toLowerCase()] || null
+
+    // 2) Crear productos en batches
+    for (const batch of chunk(importResult.toCreate, 20)) {
+      const rows = batch.map(b => {
+        const { cat_name, ...rest } = b.data
+        return { ...rest, cat_id: resolveCat(cat_name) }
+      })
+      await supabase.from('products').insert(rows)
+      done += batch.length; setImportProgress({ done, total })
+    }
+
+    // 3) Actualizar productos uno por uno (porque cada uno tiene id distinto)
+    for (const u of importResult.toUpdate) {
+      const { cat_name, ...rest } = u.data
+      await supabase.from('products').update({ ...rest, cat_id: resolveCat(cat_name) }).eq('id', u.id)
+      done++; setImportProgress({ done, total })
+    }
+
+    setImportBusy(false)
+    setImportResult(null)
+    showToast(`Importación completa: ${importResult.toCreate.length} creados, ${importResult.toUpdate.length} actualizados`)
+
+    // Refresca recargando la página (más simple que refrescar contexto)
+    setTimeout(() => window.location.reload(), 800)
+  }
+
   return (
     <div className="page">
       <div className="ph">
@@ -176,8 +352,15 @@ export default function Products() {
           <div className="pt">Galería de <span>Productos</span></div>
           <div className="ps">{products.length} referencias · {featured}/5 destacados {lowStock > 0 && <span className="tag tg-r" style={{ fontSize:10, marginLeft:6 }}>⚠ {lowStock} stock bajo</span>}</div>
         </div>
-        <button className="btn btn-gold" onClick={() => setModal('new')}>+ Nueva joya</button>
+        <div className="ph-actions">
+          <button className="btn btn-ghost" onClick={() => downloadTemplate(categories)} title="Descargar plantilla Excel vacía">📥 Plantilla</button>
+          <button className="btn btn-ghost" onClick={() => exportProducts(products, categories)} disabled={products.length === 0} title="Exportar productos actuales a Excel">📤 Exportar</button>
+          <button className="btn btn-outline" onClick={() => importRef.current?.click()} title="Importar productos desde Excel">📂 Importar</button>
+          <input ref={importRef} type="file" accept=".xlsx,.xls,.csv" style={{ display:'none' }} onChange={handleImportFile} />
+          <button className="btn btn-gold" onClick={() => setModal('new')}>+ Nueva joya</button>
+        </div>
       </div>
+
       <div className="fb">
         <input className="si" placeholder="Buscar…" value={q} onChange={e => setQ(e.target.value)} />
         <button className={`fi ${cat==='todos'?'active':''}`} onClick={() => setCat('todos')}>Todos</button>
@@ -190,6 +373,7 @@ export default function Products() {
           ))}
         </span>
       </div>
+
       <div className="pg">
         {filtered.map(p => {
           const mainImg = p.images?.[0] || p.image_url
@@ -224,7 +408,16 @@ export default function Products() {
           )
         })}
       </div>
+
       {modal && <ProductModal prod={modal==='new'?null:modal} cats={categories} onSave={d => { saveProduct(d, modal?.id||null); setModal(null) }} onClose={() => setModal(null)} />}
+
+      <ImportModal
+        result={importResult}
+        onConfirm={handleImportConfirm}
+        onClose={() => setImportResult(null)}
+        busy={importBusy}
+        progress={importProgress}
+      />
     </div>
   )
 }
