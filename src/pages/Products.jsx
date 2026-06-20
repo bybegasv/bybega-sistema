@@ -308,40 +308,63 @@ export default function Products() {
     let done = 0
     setImportProgress({ done, total })
 
-    // 1) Crear categorías faltantes
+    // 1) Releer categorías DESDE LA BD (no del state — puede estar stale después de
+    //    imports previos en la misma sesión, lo que causaría duplicados).
+    const { data: freshCats } = await supabase.from('categories').select('id,name').order('sort_order')
     const catNameMap = {}
-    categories.forEach(c => { catNameMap[c.name.trim().toLowerCase()] = c.id })
+    ;(freshCats || []).forEach(c => { catNameMap[c.name.trim().toLowerCase()] = c.id })
 
-    for (const name of importResult.newCategories) {
-      const { data, error } = await supabase.from('categories').insert({ name, color: 'tg', sort_order: categories.length + 1 }).select('id,name').single()
-      if (!error && data) catNameMap[name.toLowerCase()] = data.id
+    // 2) Crear sólo las categorías que REALMENTE no existen (case-insensitive + trim)
+    for (const rawName of importResult.newCategories) {
+      const key = String(rawName).trim().toLowerCase()
+      if (catNameMap[key]) { done++; setImportProgress({ done, total }); continue }
+      const { data, error } = await supabase.from('categories')
+        .insert({ name: String(rawName).trim(), color: 'tg', sort_order: (freshCats?.length || 0) + 1 })
+        .select('id,name').single()
+      if (!error && data) catNameMap[key] = data.id
       done++; setImportProgress({ done, total })
     }
 
-    const resolveCat = (catName) => catNameMap[String(catName).trim().toLowerCase()] || null
+    const resolveCat = (n) => catNameMap[String(n).trim().toLowerCase()] || null
 
-    // 2) Crear productos en batches
+    // Saneo para INSERT/UPDATE: numéricos vacíos → null/0, cat_id vacío → null
+    const sanitize = (raw) => {
+      const numFields = ['price','original_price','stock_total','stock_t1','stock_t2','low_stock_alert']
+      const out = { ...raw }
+      numFields.forEach(k => {
+        if (out[k] === '' || out[k] === undefined || out[k] === null) {
+          out[k] = k === 'original_price' ? null : (k === 'low_stock_alert' ? 3 : 0)
+        } else {
+          const n = Number(out[k]); out[k] = isFinite(n) ? n : (k === 'original_price' ? null : 0)
+        }
+      })
+      return out
+    }
+
+    // 3) Crear productos en batches (INSERT puede inicializar images:[])
     for (const batch of chunk(importResult.toCreate, 20)) {
       const rows = batch.map(b => {
         const { cat_name, ...rest } = b.data
-        return { ...rest, cat_id: resolveCat(cat_name) }
+        return sanitize({ ...rest, cat_id: resolveCat(cat_name), images: [], image_url: '' })
       })
-      await supabase.from('products').insert(rows)
+      const { error } = await supabase.from('products').insert(rows)
+      if (error) console.error('Insert batch error:', error)
       done += batch.length; setImportProgress({ done, total })
     }
 
-    // 3) Actualizar productos uno por uno (porque cada uno tiene id distinto)
+    // 4) UPDATE — NUNCA tocar images/image_url/emoji para no borrar las fotos existentes.
+    //    Solo actualizamos los campos editables desde Excel.
     for (const u of importResult.toUpdate) {
-      const { cat_name, ...rest } = u.data
-      await supabase.from('products').update({ ...rest, cat_id: resolveCat(cat_name) }).eq('id', u.id)
+      const { cat_name, images, image_url, emoji, ...rest } = u.data
+      const payload = sanitize({ ...rest, cat_id: resolveCat(cat_name) })
+      const { error } = await supabase.from('products').update(payload).eq('id', u.id)
+      if (error) console.error('Update error:', error, u.id)
       done++; setImportProgress({ done, total })
     }
 
     setImportBusy(false)
     setImportResult(null)
     showToast(`Importación completa: ${importResult.toCreate.length} creados, ${importResult.toUpdate.length} actualizados`)
-
-    // Refresca recargando la página (más simple que refrescar contexto)
     setTimeout(() => window.location.reload(), 800)
   }
 
