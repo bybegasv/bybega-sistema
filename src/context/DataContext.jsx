@@ -88,8 +88,16 @@ export function DataProvider({ children }) {
     if (data) setCategories(data)
   }
   const saveCategory = async (data, id) => {
-    if (id) await supabase.from('categories').update(data).eq('id', id)
-    else await supabase.from('categories').insert(data)
+    // Evita duplicados por nombre (case-insensitive, trim)
+    if (!id && data?.name) {
+      const target = String(data.name).trim().toLowerCase()
+      const dup = categories.find(c => c.name.trim().toLowerCase() === target)
+      if (dup) { showToast('Esa categoría ya existe'); return { error: { message: 'duplicate' } } }
+    }
+    let error
+    if (id) ({ error } = await supabase.from('categories').update(data).eq('id', id))
+    else    ({ error } = await supabase.from('categories').insert(data))
+    if (error) { showToast('Error al guardar categoría: ' + error.message); return { error } }
     await loadCategories()
     showToast('Categoría guardada ✓')
   }
@@ -105,8 +113,23 @@ export function DataProvider({ children }) {
     if (data) setProducts(data)
   }
   const saveProduct = async (data, id) => {
-    if (id) await supabase.from('products').update(data).eq('id', id)
-    else await supabase.from('products').insert(data)
+    // Saneamos campos numéricos: '' o NaN rompe Postgres (decimal/integer)
+    const numFields = ['price','original_price','stock_total','stock_t1','stock_t2','low_stock_alert']
+    const payload = { ...data }
+    numFields.forEach(k => {
+      if (payload[k] === '' || payload[k] === undefined || payload[k] === null) {
+        payload[k] = k === 'original_price' ? null : (k === 'low_stock_alert' ? 3 : 0)
+      } else {
+        const n = Number(payload[k])
+        payload[k] = isFinite(n) ? n : (k === 'original_price' ? null : 0)
+      }
+    })
+    // cat_id vacío también rompe (UUID)
+    if (payload.cat_id === '' || payload.cat_id === undefined) payload.cat_id = null
+    let error
+    if (id) ({ error } = await supabase.from('products').update(payload).eq('id', id))
+    else    ({ error } = await supabase.from('products').insert(payload))
+    if (error) { showToast('Error al guardar producto: ' + error.message); return { error } }
     await loadProducts()
     showToast('Producto guardado ✓')
   }
